@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#FF7F7F">
+  <title>食谱热量记录</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            coral: {
+              50: '#FFF9F9', 100: '#FFF0F0', 200: '#FFE4E4', 300: '#FFBFBF',
+              400: '#FF9F9F', 500: '#FF7F7F', 600: '#FF6B6B', 700: '#FF5252',
+              800: '#E64545', 900: '#CC3333',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #FFF9F9; min-height: 100vh; }
+    input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, createContext, useContext, useRef } = React;
+
+    // ========== 食物热量数据库 ==========
+    const foodCaloriesDb = {
+      // 主食类 - 单个/单位重量估算
+      '米饭': { calories: 116, unit: '100g', defaultWeight: 100 },
+      '大米': { calories: 345, unit: '100g', defaultWeight: 100 },
+      '小米': { calories: 358, unit: '100g', defaultWeight: 100 },
+      '小米饭': { calories: 116, unit: '100g', defaultWeight: 100 },
+      '玉米': { calories: 112, unit: '1根', defaultWeight: 150 },
+      '紫薯': { calories: 77, unit: '1个', defaultWeight: 150 },
+      '红薯': { calories: 86, unit: '1个', defaultWeight: 150 },
+      '面条': { calories: 286, unit: '100g', defaultWeight: 100 },
+      '面包': { calories: 250, unit: '1片', defaultWeight: 40 },
+      '馒头': { calories: 223, unit: '1个', defaultWeight: 100 },
+      '燕麦': { calories: 389, unit: '100g', defaultWeight: 100 },
+      '粥': { calories: 46, unit: '1碗', defaultWeight: 250 },
+      '包子': { calories: 227, unit: '1个', defaultWeight: 80 },
+      '饺子': { calories: 230, unit: '1个', defaultWeight: 20 },
+      '馄饨': { calories: 110, unit: '1个', defaultWeight: 15 },
+      
+      // 蛋白质类 - 单个/单位重量估算
+      '鸡胸肉': { calories: 165, unit: '100g', defaultWeight: 100 },
+      '鸡腿': { calories: 181, unit: '1个', defaultWeight: 120 },
+      '鸡翅': { calories: 190, unit: '1个', defaultWeight: 45 },
+      '鸡蛋': { calories: 155, unit: '1个', defaultWeight: 50 },
+      '鸭蛋': { calories: 180, unit: '1个', defaultWeight: 65 },
+      '鹌鹑蛋': { calories: 160, unit: '1个', defaultWeight: 10 },
+      '牛肉': { calories: 250, unit: '100g', defaultWeight: 100 },
+      '牛排': { calories: 250, unit: '1块', defaultWeight: 150 },
+      '猪肉': { calories: 143, unit: '100g', defaultWeight: 100 },
+      '排骨': { calories: 264, unit: '1块', defaultWeight: 50 },
+      '猪蹄': { calories: 260, unit: '1个', defaultWeight: 250 },
+      '羊肉': { calories: 203, unit: '100g', defaultWeight: 100 },
+      '鱼': { calories: 100, unit: '1条', defaultWeight: 300 },
+      '鲈鱼': { calories: 97, unit: '1条', defaultWeight: 300 },
+      '三文鱼': { calories: 208, unit: '100g', defaultWeight: 100 },
+      '虾': { calories: 80, unit: '1只', defaultWeight: 15 },
+      '蟹': { calories: 103, unit: '1只', defaultWeight: 200 },
+      '豆腐': { calories: 85, unit: '1块', defaultWeight: 200 },
+      '豆浆': { calories: 30, unit: '1杯', defaultWeight: 250 },
+      '牛奶': { calories: 54, unit: '1盒', defaultWeight: 250 },
+      '酸奶': { calories: 91, unit: '1杯', defaultWeight: 150 },
+      '奶酪': { calories: 385, unit: '1块', defaultWeight: 30 },
+      
+      // 蔬菜类 - 单个/单位重量估算
+      '西兰花': { calories: 34, unit: '1个', defaultWeight: 300 },
+      '菠菜': { calories: 23, unit: '1捆', defaultWeight: 200 },
+      '生菜': { calories: 14, unit: '1棵', defaultWeight: 300 },
+      '番茄': { calories: 18, unit: '1个', defaultWeight: 150 },
+      '西红柿': { calories: 18, unit: '1个', defaultWeight: 150 },
+      '黄瓜': { calories: 16, unit: '1根', defaultWeight: 150 },
+      '胡萝卜': { calories: 41, unit: '1根', defaultWeight: 100 },
+      '土豆': { calories: 77, unit: '1个', defaultWeight: 150 },
+      '茄子': { calories: 25, unit: '1个', defaultWeight: 200 },
+      '青椒': { calories: 22, unit: '1个', defaultWeight: 80 },
+      '洋葱': { calories: 40, unit: '1个', defaultWeight: 200 },
+      '大蒜': { calories: 149, unit: '1瓣', defaultWeight: 5 },
+      '蒜': { calories: 149, unit: '1瓣', defaultWeight: 5 },
+      '姜': { calories: 41, unit: '1块', defaultWeight: 20 },
+      '葱': { calories: 30, unit: '1根', defaultWeight: 20 },
+      '芹菜': { calories: 16, unit: '1根', defaultWeight: 50 },
+      '冬瓜': { calories: 12, unit: '1块', defaultWeight: 200 },
+      '南瓜': { calories: 26, unit: '1块', defaultWeight: 200 },
+      '蘑菇': { calories: 26, unit: '1朵', defaultWeight: 20 },
+      '香菇': { calories: 40, unit: '1朵', defaultWeight: 20 },
+      '木耳': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '海带': { calories: 13, unit: '100g', defaultWeight: 100 },
+      '娃娃菜': { calories: 15, unit: '1棵', defaultWeight: 300 },
+      '白菜': { calories: 17, unit: '1棵', defaultWeight: 500 },
+      '包菜': { calories: 22, unit: '1个', defaultWeight: 500 },
+      '青菜': { calories: 14, unit: '1捆', defaultWeight: 200 },
+      '白萝卜': { calories: 21, unit: '1个', defaultWeight: 300 },
+      '莲藕': { calories: 70, unit: '1节', defaultWeight: 150 },
+      '山药': { calories: 51, unit: '1段', defaultWeight: 150 },
+      '芋头': { calories: 77, unit: '1个', defaultWeight: 100 },
+      '红薯': { calories: 86, unit: '1个', defaultWeight: 150 },
+      '紫薯': { calories: 77, unit: '1个', defaultWeight: 150 },
+      '玉米': { calories: 116, unit: '1根', defaultWeight: 150 },
+      '豌豆': { calories: 105, unit: '100g', defaultWeight: 100 },
+      '毛豆': { calories: 123, unit: '100g', defaultWeight: 100 },
+      '扁豆': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '四季豆': { calories: 28, unit: '100g', defaultWeight: 100 },
+      '长豆角': { calories: 30, unit: '100g', defaultWeight: 100 },
+      '西葫芦': { calories: 19, unit: '1个', defaultWeight: 200 },
+      '苦瓜': { calories: 19, unit: '1个', defaultWeight: 200 },
+      '丝瓜': { calories: 20, unit: '1个', defaultWeight: 200 },
+      '竹笋': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '芦笋': { calories: 27, unit: '100g', defaultWeight: 100 },
+      '秋葵': { calories: 37, unit: '100g', defaultWeight: 100 },
+      '芥蓝': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '油麦菜': { calories: 15, unit: '100g', defaultWeight: 100 },
+      '空心菜': { calories: 20, unit: '100g', defaultWeight: 100 },
+      '茼蒿': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '苋菜': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '紫甘蓝': { calories: 25, unit: '100g', defaultWeight: 100 },
+      '荷兰豆': { calories: 27, unit: '100g', defaultWeight: 100 },
+      '蚕豆': { calories: 116, unit: '100g', defaultWeight: 100 },
+      '水芹': { calories: 16, unit: '100g', defaultWeight: 100 },
+      '香菜': { calories: 31, unit: '100g', defaultWeight: 50 },
+      '小葱': { calories: 25, unit: '1把', defaultWeight: 50 },
+      '大葱': { calories: 30, unit: '1根', defaultWeight: 100 },
+      '蒜苗': { calories: 30, unit: '100g', defaultWeight: 100 },
+      '辣椒': { calories: 26, unit: '1个', defaultWeight: 50 },
+      '小米辣': { calories: 26, unit: '100g', defaultWeight: 50 },
+      '朝天椒': { calories: 26, unit: '100g', defaultWeight: 50 },
+      '金针菇': { calories: 30, unit: '100g', defaultWeight: 100 },
+      '杏鲍菇': { calories: 30, unit: '1个', defaultWeight: 200 },
+      '蟹味菇': { calories: 28, unit: '100g', defaultWeight: 100 },
+      '白玉菇': { calories: 28, unit: '100g', defaultWeight: 100 },
+      '紫菜': { calories: 260, unit: '100g', defaultWeight: 100 },
+      '豆腐': { calories: 70, unit: '100g', defaultWeight: 100 },
+      '豆浆': { calories: 30, unit: '1杯', defaultWeight: 250 },
+      '腐竹': { calories: 450, unit: '100g', defaultWeight: 100 },
+      '千张': { calories: 260, unit: '100g', defaultWeight: 100 },
+      '豆干': { calories: 150, unit: '1块', defaultWeight: 50 },
+      
+      // 水果类 - 单个/单位重量估算
+      '苹果': { calories: 52, unit: '1个', defaultWeight: 150 },
+      '香蕉': { calories: 91, unit: '1根', defaultWeight: 100 },
+      '橙子': { calories: 47, unit: '1个', defaultWeight: 150 },
+      '西瓜': { calories: 30, unit: '1块', defaultWeight: 200 },
+      '葡萄': { calories: 43, unit: '1串', defaultWeight: 200 },
+      '草莓': { calories: 32, unit: '1颗', defaultWeight: 20 },
+      '蓝莓': { calories: 57, unit: '100g', defaultWeight: 100 },
+      '芒果': { calories: 60, unit: '1个', defaultWeight: 250 },
+      '菠萝': { calories: 48, unit: '1块', defaultWeight: 150 },
+      '桃子': { calories: 42, unit: '1个', defaultWeight: 150 },
+      '梨': { calories: 58, unit: '1个', defaultWeight: 150 },
+      '橘子': { calories: 44, unit: '1个', defaultWeight: 100 },
+      '柚子': { calories: 42, unit: '1瓣', defaultWeight: 50 },
+      '猕猴桃': { calories: 61, unit: '1个', defaultWeight: 80 },
+      '柠檬': { calories: 35, unit: '1个', defaultWeight: 80 },
+      
+      // 油类
+      '橄榄油': { calories: 884, unit: '100g', defaultWeight: 100 },
+      '花生油': { calories: 899, unit: '100g', defaultWeight: 100 },
+      '菜籽油': { calories: 899, unit: '100g', defaultWeight: 100 },
+      '猪油': { calories: 897, unit: '100g', defaultWeight: 100 },
+      '芝麻油': { calories: 898, unit: '100g', defaultWeight: 100 },
+      '黄油': { calories: 717, unit: '100g', defaultWeight: 100 },
+      
+      // 调料类
+      '盐': { calories: 0, unit: '1勺', defaultWeight: 5 },
+      '糖': { calories: 400, unit: '1勺', defaultWeight: 10 },
+      '白糖': { calories: 400, unit: '1勺', defaultWeight: 10 },
+      '酱油': { calories: 67, unit: '1勺', defaultWeight: 10 },
+      '生抽': { calories: 67, unit: '1勺', defaultWeight: 10 },
+      '老抽': { calories: 120, unit: '1勺', defaultWeight: 10 },
+      '醋': { calories: 21, unit: '1勺', defaultWeight: 10 },
+      '料酒': { calories: 115, unit: '1勺', defaultWeight: 10 },
+      '蚝油': { calories: 110, unit: '1勺', defaultWeight: 10 },
+      '番茄酱': { calories: 85, unit: '1勺', defaultWeight: 10 },
+      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
+      '花椒': { calories: 316, unit: '10粒', defaultWeight: 1 },
+      '八角': { calories: 195, unit: '1个', defaultWeight: 2 },
+      '黑胡椒': { calories: 255, unit: '1勺', defaultWeight: 3 },
+      '孜然': { calories: 330, unit: '1勺', defaultWeight: 5 },
+      '辣椒粉': { calories: 281, unit: '1勺', defaultWeight: 5 },
+      '味精': { calories: 350, unit: '1勺', defaultWeight: 3 },
+      '鸡精': { calories: 300, unit: '1勺', defaultWeight: 3 },
+      '蒸鱼豉油': { calories: 67, unit: '1勺', defaultWeight: 10 },
+      '香油': { calories: 898, unit: '1勺', defaultWeight: 5 },
+      '花椒粉': { calories: 316, unit: '1勺', defaultWeight: 5 },
+      '五香粉': { calories: 300, unit: '1勺', defaultWeight: 5 },
+      '姜粉': { calories: 41, unit: '1勺', defaultWeight: 5 },
+      '蒜粉': { calories: 149, unit: '1勺', defaultWeight: 5 },
+      '淀粉': { calories: 345, unit: '1勺', defaultWeight: 10 },
+      '生粉': { calories: 345, unit: '1勺', defaultWeight: 10 },
+      '米酒': { calories: 115, unit: '1勺', defaultWeight: 10 },
+      '辣椒酱': { calories: 150, unit: '1勺', defaultWeight: 10 },
+      '芝麻酱': { calories: 600, unit: '1勺', defaultWeight: 15 },
+      '花生酱': { calories: 590, unit: '1勺', defaultWeight: 15 },
+      '沙拉酱': { calories: 490, unit: '1勺', defaultWeight: 15 },
+      '芥末酱': { calories: 60, unit: '1勺', defaultWeight: 10 },
+      '黄豆酱': { calories: 150, unit: '1勺', defaultWeight: 10 },
+      '甜面酱': { calories: 130, unit: '1勺', defaultWeight: 10 },
+      '腐乳': { calories: 150, unit: '1块', defaultWeight: 20 },
+      '豆豉': { calories: 280, unit: '1勺', defaultWeight: 10 },
+      '剁椒': { calories: 30, unit: '1勺', defaultWeight: 10 },
+      '泡椒': { calories: 25, unit: '1个', defaultWeight: 15 },
+      '花椒油': { calories: 898, unit: '1勺', defaultWeight: 5 },
+      '辣椒油': { calories: 898, unit: '1勺', defaultWeight: 5 },
+      '花椒粒': { calories: 316, unit: '10粒', defaultWeight: 1 },
+      '桂皮': { calories: 250, unit: '1块', defaultWeight: 5 },
+      '香叶': { calories: 300, unit: '1片', defaultWeight: 1 },
+      '陈皮': { calories: 30, unit: '1片', defaultWeight: 1 },
+      '干辣椒': { calories: 300, unit: '1个', defaultWeight: 5 },
+      '豆豉': { calories: 280, unit: '1勺', defaultWeight: 10 },
+      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
+      '花椒': { calories: 316, unit: '10粒', defaultWeight: 1 },
+      '八角': { calories: 195, unit: '1个', defaultWeight: 2 },
+      '油': { calories: 900, unit: '1勺', defaultWeight: 10 },
+      '食用油': { calories: 900, unit: '1勺', defaultWeight: 10 },
+      '淀粉': { calories: 345, unit: '1勺', defaultWeight: 10 },
+      '生粉': { calories: 345, unit: '1勺', defaultWeight: 10 },
+      '料酒': { calories: 115, unit: '1勺', defaultWeight: 10 },
+      '米酒': { calories: 115, unit: '1勺', defaultWeight: 10 },
+      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
+      '辣椒酱': { calories: 150, unit: '1勺', defaultWeight: 10 },
+      '芝麻酱': { calories: 600, unit: '1勺', defaultWeight: 15 },
+      '花生酱': { calories: 590, unit: '1勺', defaultWeight: 15 },
+      '沙拉酱': { calories: 490, unit: '1勺', defaultWeight: 15 },
+      '番茄酱': { calories: 85, unit: '1勺', defaultWeight: 10 },
+      '芥末酱': { calories: 60, unit: '1勺', defaultWeight: 10 },
+      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
+      '黄豆酱': { calories: 150, unit: '1勺', defaultWeight: 10 },
+      '甜面酱': { calories: 130, unit: '1勺', defaultWeight: 10 },
+      '腐乳': { calories: 150, unit: '1块', defaultWeight: 20 },
+      '豆豉': { calories: 280, unit: '1勺', defaultWeight: 10 },
+      '剁椒': { calories: 30, unit: '1勺', defaultWeight: 10 },
+      '泡椒': { calories: 25, unit: '1个', defaultWeight: 15 },
+      
+      // 零食类
+      '巧克力': { calories: 539, unit: '1块', defaultWeight: 20 },
+      '薯片': { calories: 480, unit: '1袋', defaultWeight: 50 },
+      '饼干': { calories: 430, unit: '1片', defaultWeight: 10 },
+      '糖果': { calories: 400, unit: '1颗', defaultWeight: 10 },
+      '坚果': { calories: 600, unit: '1颗', defaultWeight: 10 },
+      '瓜子': { calories: 555, unit: '1把', defaultWeight: 30 },
+      '花生': { calories: 567, unit: '10颗', defaultWeight: 10 },
+      
+      // 饮料类
+      '可乐': { calories: 42, unit: '1罐', defaultWeight: 330 },
+      '果汁': { calories: 50, unit: '1杯', defaultWeight: 200 },
+      '咖啡': { calories: 2, unit: '1杯', defaultWeight: 200 },
+      '茶': { calories: 1, unit: '1杯', defaultWeight: 250 },
+      '啤酒': { calories: 32, unit: '1瓶', defaultWeight: 330 },
+      '红酒': { calories: 75, unit: '1杯', defaultWeight: 100 },
+      
+      // 其他
+      '水': { calories: 0, unit: '1杯', defaultWeight: 250 },
+      '蜂蜜': { calories: 321, unit: '1勺', defaultWeight: 10 },
+    };
+
+    // 中文数字转阿拉伯数字
+    function parseChineseNumber(str) {
+      const chineseNumberMap = {
+        '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, 
+        '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+      };
+      
+      if (str in chineseNumberMap) {
+        return chineseNumberMap[str];
+      }
+      
+      // 处理"十一"、"二十一"等
+      if (str.startsWith('十')) {
+        const afterTen = str.slice(1);
+        if (afterTen === '') return 10;
+        return 10 + (chineseNumberMap[afterTen] || 0);
+      }
+      
+      // 处理"二十一"、"三十二"等
+      const tenMatch = str.match(/^(\w+)十(\w*)$/);
+      if (tenMatch) {
+        const tens = chineseNumberMap[tenMatch[1]] || 1;
+        const ones = chineseNumberMap[tenMatch[2]] || 0;
+        return tens * 10 + ones;
+      }
+      
+      // 尝试直接解析阿拉伯数字
+      const num = parseFloat(str);
+      if (!isNaN(num)) {
+        return num;
+      }
+      
+      return 1;
+    }
+    
+    // 解析单个食物项
+    function parseFoodItem(text) {
+      const quantityUnits = ['个', '颗', '只', '杯', '碗', '份', '片', '根', '条', '块', 
+                            '瓣', '朵', '粒', '把', '捆', '棵', '罐', '瓶', '盒', 
+                            '袋', '包', '勺', '匙', '双', '对'];
+      const weightUnits = ['g', '克', 'kg', '千克', 'ml', '毫升'];
+      
+      // 模式1: 数量+单位+食物，如"两个鸡蛋"、"100克米饭"
+      for (const unit of quantityUnits) {
+        const pattern = new RegExp(`^(.*?)${unit}(.+)$`);
+        const match = text.match(pattern);
+        if (match) {
+          const quantity = parseChineseNumber(match[1]);
+          const foodName = match[2].trim();
+          if (foodCaloriesDb[foodName]) {
+            const foodData = foodCaloriesDb[foodName];
+            const weight = quantity * foodData.defaultWeight;
+            const calories = Math.round((foodData.calories * weight) / 100);
+            return { name: foodName, quantity, quantityUnit: unit, weight, caloriesPer100g: foodData.calories, calories };
+          }
+        }
+      }
+      
+      // 模式2: 食物+数量+单位，如"鸡蛋两个"、"米饭100克"
+      for (const unit of quantityUnits) {
+        const pattern = new RegExp(`^(.+?)([^\\d]+?)${unit}$`);
+        const match = text.match(pattern);
+        if (match) {
+          const foodName = match[1].trim();
+          if (foodCaloriesDb[foodName]) {
+            const quantity = parseChineseNumber(match[2]);
+            const foodData = foodCaloriesDb[foodName];
+            const weight = quantity * foodData.defaultWeight;
+            const calories = Math.round((foodData.calories * weight) / 100);
+            return { name: foodName, quantity, quantityUnit: unit, weight, caloriesPer100g: foodData.calories, calories };
+          }
+        }
+      }
+      
+      // 模式3: 重量+食物，如"100g米饭"、"200毫升牛奶"
+      for (const unit of weightUnits) {
+        const pattern = new RegExp(`^(\\d+)${unit}(.+)$`);
+        const match = text.match(pattern);
+        if (match) {
+          let weight = parseFloat(match[1]);
+          const foodName = match[2].trim();
+          if (unit === 'kg' || unit === '千克') weight *= 1000;
+          if (foodCaloriesDb[foodName]) {
+            const foodData = foodCaloriesDb[foodName];
+            const calories = Math.round((foodData.calories * weight) / 100);
+            return { name: foodName, weight, caloriesPer100g: foodData.calories, calories };
+          }
+        }
+      }
+      
+      // 模式4: 食物+重量，如"米饭100克"
+      for (const unit of weightUnits) {
+        const pattern = new RegExp(`^(.+?)(\\d+)${unit}$`);
+        const match = text.match(pattern);
+        if (match) {
+          const foodName = match[1].trim();
+          if (foodCaloriesDb[foodName]) {
+            let weight = parseFloat(match[2]);
+            if (unit === 'kg' || unit === '千克') weight *= 1000;
+            const foodData = foodCaloriesDb[foodName];
+            const calories = Math.round((foodData.calories * weight) / 100);
+            return { name: foodName, weight, caloriesPer100g: foodData.calories, calories };
+          }
+        }
+      }
+      
+      // 模式5: 单独食物名称
+      if (foodCaloriesDb[text]) {
+        const foodData = foodCaloriesDb[text];
+        const calories = Math.round((foodData.calories * foodData.defaultWeight) / 100);
+        return { name: text, weight: foodData.defaultWeight, caloriesPer100g: foodData.calories, calories };
+      }
+      
+      // 兜底：未知食物
+      return { name: text, weight: 100, caloriesPer100g: 0, calories: 0 };
+    }
+    
+    // 自然语言输入解析
+    function parseFoodInput(input) {
+      const foods = [];
+      
+      // 替换分隔符，然后按逗号/顿号分割成多个食物项
+      const items = input
+        .replace(/[，,。、]/g, '|')
+        .split('|')
+        .map(item => item.trim())
+        .filter(item => item);
+      
+      for (let item of items) {
+        // 处理"X个半"特殊情况，如"一个半"、"两个半"、"三颗半"
+        const halfMatch = item.match(/^(.+?)(个|颗|只|杯|碗|份|片|根|条|块|瓣|朵|粒|把|捆|棵)半(.+)?$/);
+        if (halfMatch) {
+          const numStr = halfMatch[1];
+          const unit = halfMatch[2];
+          const foodName = (halfMatch[3] || '').trim();
+          const quantity = parseChineseNumber(numStr) + 0.5;
+          
+          if (foodName && foodCaloriesDb[foodName]) {
+            const foodData = foodCaloriesDb[foodName];
+            const weight = quantity * foodData.defaultWeight;
+            const calories = Math.round((foodData.calories * weight) / 100);
+            foods.push({ name: foodName, quantity, quantityUnit: unit, weight, caloriesPer100g: foodData.calories, calories });
+            continue;
+          }
+        }
+        
+        // 处理"半X"特殊情况
+        if (item.startsWith('半')) {
+          const rest = item.slice(1).trim();
+          const quantityUnits = ['个', '颗', '只', '杯', '碗', '份', '片', '根', '条', '块', 
+                                '瓣', '朵', '粒', '把', '捆', '棵'];
+          let matched = false;
+          for (const unit of quantityUnits) {
+            if (rest.startsWith(unit)) {
+              const foodName = rest.slice(1).trim();
+              if (foodCaloriesDb[foodName]) {
+                const foodData = foodCaloriesDb[foodName];
+                const weight = 0.5 * foodData.defaultWeight;
+                const calories = Math.round((foodData.calories * weight) / 100);
+                foods.push({ name: foodName, quantity: 0.5, quantityUnit: unit, weight, caloriesPer100g: foodData.calories, calories });
+                matched = true;
+                break;
+              }
+            }
+          }
+          if (!matched) {
+            foods.push({ name: item, weight: 50, caloriesPer100g: 0, calories: 0 });
+          }
+          continue;
+        }
+        
+        // 使用通用解析函数
+        const result = parseFoodItem(item);
+        foods.push(result);
+      }
+      
+      return foods;
+    }
+
+    // ========== 菜谱数据 ==========
+    const defaultRecipes = [
+      { id: '1', name: '香煎鸡胸肉', category: 'protein', ingredients: [{name:'鸡胸肉',caloriesPer100g:165,weight:200}], seasonings: [{name:'盐',caloriesPer100g:0,weight:2},{name:'黑胡椒',caloriesPer100g:255,weight:1}], oilType: '橄榄油', oilAmount: 10, totalCalories: 350 },
+      { id: '2', name: '番茄炒蛋', category: 'protein', ingredients: [{name:'鸡蛋',caloriesPer100g:155,weight:150},{name:'番茄',caloriesPer100g:18,weight:200}], seasonings: [{name:'盐',caloriesPer100g:0,weight:2},{name:'糖',caloriesPer100g:400,weight:5}], oilType: '花生油', oilAmount: 15, totalCalories: 280 },
+      { id: '3', name: '清蒸鲈鱼', category: 'protein', ingredients: [{name:'鲈鱼',caloriesPer100g:97,weight:300}], seasonings: [{name:'姜',caloriesPer100g:41,weight:10},{name:'葱',caloriesPer100g:30,weight:5},{name:'蒸鱼豉油',caloriesPer100g:67,weight:15}], oilType: '芝麻油', oilAmount: 5, totalCalories: 320 },
+      { id: '4', name: '蒜蓉西兰花', category: 'fiber', ingredients: [{name:'西兰花',caloriesPer100g:34,weight:300}], seasonings: [{name:'蒜',caloriesPer100g:149,weight:10},{name:'盐',caloriesPer100g:0,weight:2}], oilType: '橄榄油', oilAmount: 10, totalCalories: 150 },
+      { id: '5', name: '胡萝卜炒青菜', category: 'fiber', ingredients: [{name:'胡萝卜',caloriesPer100g:41,weight:150},{name:'青菜',caloriesPer100g:14,weight:200}], seasonings: [{name:'盐',caloriesPer100g:0,weight:2}], oilType: '菜籽油', oilAmount: 12, totalCalories: 140 },
+      { id: '6', name: '凉拌黄瓜', category: 'fiber', ingredients: [{name:'黄瓜',caloriesPer100g:16,weight:300}], seasonings: [{name:'蒜',caloriesPer100g:149,weight:5},{name:'醋',caloriesPer100g:21,weight:10},{name:'香油',caloriesPer100g:898,weight:5}], oilType: '无', oilAmount: 0, totalCalories: 80 },
+      { id: '7', name: '白米饭', category: 'carbs', ingredients: [{name:'大米',caloriesPer100g:116,weight:250}], seasonings: [], oilType: '无', oilAmount: 0, totalCalories: 290 },
+      { id: '8', name: '紫薯', category: 'carbs', ingredients: [{name:'紫薯',caloriesPer100g:77,weight:200}], seasonings: [], oilType: '无', oilAmount: 0, totalCalories: 140 },
+      { id: '9', name: '煮玉米', category: 'carbs', ingredients: [{name:'玉米',caloriesPer100g:112,weight:250}], seasonings: [], oilType: '无', oilAmount: 0, totalCalories: 280 },
+      { id: '10', name: '清炒时蔬', category: 'fat', ingredients: [{name:'各种绿叶菜',caloriesPer100g:20,weight:300}], seasonings: [{name:'蒜',caloriesPer100g:149,weight:5},{name:'盐',caloriesPer100g:0,weight:2}], oilType: '猪油', oilAmount: 15, totalCalories: 180 },
+    ];
+
+    const categoryNames = { protein: '蛋白质', fiber: '膳食纤维', carbs: '碳水', fat: '油脂' };
+    const categoryColors = { protein: 'bg-red-100 text-red-600', fiber: 'bg-green-100 text-green-600', carbs: 'bg-yellow-100 text-yellow-600', fat: 'bg-orange-100 text-orange-600' };
+
+    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+    const getTodayDate = () => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+    const isMonday = () => new Date().getDay() === 1;
+    
+    // 获取最近N个周一的日期
+    const getRecentMondays = (count = 10) => {
+      const mondays = [];
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const thisMonday = new Date(now);
+      thisMonday.setDate(now.getDate() - diff);
+      
+      for (let i = 0; i < count; i++) {
+        const date = new Date(thisMonday);
+        date.setDate(thisMonday.getDate() - i * 7);
+        mondays.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
+      }
+      return mondays;
+    };
+    
+    // 格式化日期显示
+    const formatDate = (dateStr) => {
+      const date = new Date(dateStr);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}月${day}日`;
+    };
+
+    // ========== Store ==========
+    const StoreContext = createContext(null);
+
+    function useStore() {
+      const store = useContext(StoreContext);
+      if (!store) throw new Error('useStore must be used within StoreProvider');
+      return store;
+    }
+
+    function StoreProvider({ children }) {
+      const [userProfile, setUserProfile] = useState(() => {
+        const saved = localStorage.getItem('userProfile');
+        return saved ? JSON.parse(saved) : { height: 170, weight: 65, gender: 'male', dailyCalorieTarget: 2000 };
+      });
+      const [todayRecord, setTodayRecord] = useState(() => {
+        const saved = localStorage.getItem('todayRecord');
+        const parsed = saved ? JSON.parse(saved) : null;
+        if (parsed && parsed.date === getTodayDate()) return parsed;
+        return { date: getTodayDate(), meals: { breakfast: [], lunch: [], dinner: [] }, totalCalories: 0 };
+      });
+      const [recipes, setRecipes] = useState(() => {
+        const saved = localStorage.getItem('recipes');
+        return saved ? JSON.parse(saved) : defaultRecipes;
+      });
+      const [historyRecords, setHistoryRecords] = useState(() => {
+        const saved = localStorage.getItem('historyRecords');
+        return saved ? JSON.parse(saved) : [];
+      });
+      const [weightRecords, setWeightRecords] = useState(() => {
+        const saved = localStorage.getItem('weightRecords');
+        return saved ? JSON.parse(saved) : {};
+      });
+      const [initialWeight, setInitialWeight] = useState(() => {
+        const saved = localStorage.getItem('initialWeight');
+        return saved ? JSON.parse(saved) : null;
+      });
+
+      useEffect(() => { localStorage.setItem('userProfile', JSON.stringify(userProfile)); }, [userProfile]);
+      useEffect(() => { localStorage.setItem('todayRecord', JSON.stringify(todayRecord)); }, [todayRecord]);
+      useEffect(() => { localStorage.setItem('recipes', JSON.stringify(recipes)); }, [recipes]);
+      useEffect(() => { localStorage.setItem('historyRecords', JSON.stringify(historyRecords)); }, [historyRecords]);
+      useEffect(() => { localStorage.setItem('weightRecords', JSON.stringify(weightRecords)); }, [weightRecords]);
+      useEffect(() => { localStorage.setItem('initialWeight', JSON.stringify(initialWeight)); }, [initialWeight]);
+
+      const updateUserProfile = (profile) => setUserProfile(prev => ({ ...prev, ...profile }));
+
+      const addFood = (meal, food) => {
+        setTodayRecord(prev => {
+          const newMeals = { ...prev.meals, [meal]: [...prev.meals[meal], { ...food, id: generateId() }] };
+          const totalCalories = Object.values(newMeals).flat().reduce((sum, f) => sum + f.calories, 0);
+          return { ...prev, meals: newMeals, totalCalories };
+        });
+      };
+
+      const addFoods = (meal, foods) => {
+        setTodayRecord(prev => {
+          const newFoods = foods.map(f => ({ ...f, id: generateId() }));
+          const newMeals = { ...prev.meals, [meal]: [...prev.meals[meal], ...newFoods] };
+          const totalCalories = Object.values(newMeals).flat().reduce((sum, f) => sum + f.calories, 0);
+          return { ...prev, meals: newMeals, totalCalories };
+        });
+      };
+
+      const removeFood = (meal, foodId) => {
+        setTodayRecord(prev => {
+          const newMeals = { ...prev.meals, [meal]: prev.meals[meal].filter(f => f.id !== foodId) };
+          const totalCalories = Object.values(newMeals).flat().reduce((sum, f) => sum + f.calories, 0);
+          return { ...prev, meals: newMeals, totalCalories };
+        });
+      };
+
+      const updateWeight = (weight) => setTodayRecord(prev => ({ ...prev, weight }));
+
+      const addRecipe = (recipe) => setRecipes(prev => [...prev, { ...recipe, id: generateId() }]);
+
+      const updateRecipe = (id, updatedRecipe) => setRecipes(prev => prev.map(r => r.id === id ? { ...updatedRecipe, id } : r));
+
+      const deleteRecipe = (id) => setRecipes(prev => prev.filter(r => r.id !== id));
+
+      const addToHistory = (record) => {
+        setHistoryRecords(prev => {
+          const existing = prev.findIndex(r => r.date === record.date);
+          if (existing >= 0) { const updated = [...prev]; updated[existing] = record; return updated; }
+          return [...prev, record];
+        });
+      };
+      
+      const updateHistoryWeight = (date, weight) => {
+        setHistoryRecords(prev => {
+          const existing = prev.findIndex(r => r.date === date);
+          if (existing >= 0) { 
+            const updated = [...prev]; 
+            updated[existing] = { ...updated[existing], weight }; 
+            return updated; 
+          }
+          return [...prev, { date, weight }];
+        });
+      };
+      
+      const setWeightForDate = (date, weight) => {
+        setWeightRecords(prev => ({ ...prev, [date]: weight }));
+      };
+      
+      const updateInitialWeight = (weight) => {
+        setInitialWeight(weight);
+      };
+
+      return (
+        <StoreContext.Provider value={{ 
+          userProfile, updateUserProfile, todayRecord, addFood, addFoods, removeFood, 
+          updateWeight, recipes, addRecipe, updateRecipe, deleteRecipe, historyRecords, addToHistory,
+          updateHistoryWeight, weightRecords, setWeightForDate, initialWeight, updateInitialWeight, foodCaloriesDb 
+        }}>
+          {children}
+        </StoreContext.Provider>
+      );
+    }
+
+    // ========== Icons ==========
+    function Icon({ name, size = 20, className = '' }) {
+      const icons = {
+        flame: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+        book: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+        user: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+        chevronDown: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"/></svg>,
+        chevronLeft: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 18 9 12 15 6"/></svg>,
+        plus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+        x: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+        search: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+        chevronRight: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="9 18 15 12 9 6"/></svg>,
+        sparkles: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M5 19l1 3 1-3 3-1-3-1-1-3-1 3-3 1 3 1z"/><path d="M18 14l.5 1.5L20 16l-1.5.5L18 18l-.5-1.5L16 16l1.5-.5L18 14z"/></svg>,
+        alert: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+        trendingDown: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>,
+        scale: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 3v17a1 1 0 0 1-1 1H5a2 2 0 0 1 0-4h14a2 2 0 0 1 0 4h-2"/><path d="M6 21a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H6z"/></svg>,
+        calendar: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+        trendingUp: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+        minus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+        oil: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 8h14l-1.5 13H6.5L5 8z"/><path d="M6 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M9 12v4"/><path d="M12 12v4"/><path d="M15 12v4"/></svg>,
+        edit: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+        trash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+        brain: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 4.5a2.5 2.5 0 0 0-4.96-.46 2.5 2.5 0 0 0-1.98 3 2.5 2.5 0 0 0 1.3 4.24 2.5 2.5 0 0 1-.66 4.92 2.5 2.5 0 0 0 1.98 3 2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 1.98-3 2.5 2.5 0 0 0-1.3-4.24 2.5 2.5 0 0 1 .66-4.92 2.5 2.5 0 0 0-1.98-3z"/></svg>,
+      };
+      return icons[name] || null;
+    }
+
+    // ========== Layout Components ==========
+    function BottomNav({ activeTab, onTabChange }) {
+      return (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-coral-100 shadow-lg z-50">
+          <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+            {[
+              { tab: 'calories', label: '每日热量', icon: 'flame' }, 
+              { tab: 'weight', label: '体重跟踪', icon: 'scale' }, 
+              { tab: 'recipes', label: '菜谱', icon: 'book' }
+            ].map(item => (
+              <button key={item.tab} onClick={() => onTabChange(item.tab)}
+                className={`flex flex-col items-center justify-center w-full h-full transition-colors ${activeTab === item.tab ? 'text-coral-500' : 'text-gray-400'}`}>
+                <Icon name={item.icon} size={24} className={activeTab === item.tab ? '' : ''} />
+                <span className="text-xs mt-1 font-medium">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      );
+    }
+
+    function Layout({ children, activeTab, onTabChange }) {
+      return (
+        <div className="min-h-screen bg-coral-50 pb-16">
+          <header className="bg-gradient-to-r from-coral-400 to-coral-500 text-white px-4 py-6 shadow-md">
+            <h1 className="text-xl font-semibold">食谱热量记录</h1>
+            <p className="text-coral-100 text-sm mt-1">健康饮食，轻松管理</p>
+          </header>
+          <main className="max-w-lg mx-auto px-4 py-4">{children}</main>
+          <BottomNav activeTab={activeTab} onTabChange={onTabChange} />
+        </div>
+      );
+    }
+
+    // ========== Calories Page Components ==========
+    function UserInfoCard() {
+      const { userProfile, updateUserProfile } = useStore();
+      const [isExpanded, setIsExpanded] = useState(false);
+
+      return (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
+          <button onClick={() => setIsExpanded(!isExpanded)} className="w-full flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-coral-100 flex items-center justify-center">
+                <Icon name="user" size={20} className="text-coral-500" />
+              </div>
+              <div className="text-left">
+                <p className="font-medium text-gray-700">个人信息</p>
+                <p className="text-sm text-gray-500">目标 {userProfile.dailyCalorieTarget} kcal/天</p>
+              </div>
+            </div>
+            <Icon name="chevronDown" size={20} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {isExpanded && (
+            <div className="mt-4 pt-4 border-t border-coral-100 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">身高 (cm)</label>
+                  <input type="number" value={userProfile.height} onChange={e => updateUserProfile({ height: Number(e.target.value) })} className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">体重 (kg)</label>
+                  <input type="number" value={userProfile.weight} onChange={e => updateUserProfile({ weight: Number(e.target.value) })} className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">性别</label>
+                <div className="flex gap-2">
+                  {['male', 'female'].map(g => (
+                    <button key={g} onClick={() => updateUserProfile({ gender: g })} className={`flex-1 py-2 rounded-lg font-medium transition-colors ${userProfile.gender === g ? 'bg-coral-500 text-white' : 'bg-coral-50 text-coral-600'}`}>{g === 'male' ? '男' : '女'}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">每日热量目标 (kcal)</label>
+                <input type="number" value={userProfile.dailyCalorieTarget} onChange={e => updateUserProfile({ dailyCalorieTarget: Number(e.target.value) })} className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function CalorieSummary() {
+      const { todayRecord, userProfile } = useStore();
+      const { totalCalories } = todayRecord;
+      const target = userProfile.dailyCalorieTarget;
+      const remaining = target - totalCalories;
+      const percentage = Math.min((totalCalories / target) * 100, 100);
+
+      return (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-gray-500 mb-1">今日摄入</p>
+              <p className="text-3xl font-bold text-gray-800">
+                <span className={percentage >= 100 ? 'text-coral-600' : percentage >= 75 ? 'text-coral-400' : 'text-coral-300'}>{totalCalories}</span>
+                <span className="text-base font-normal text-gray-400"> / {target}</span>
+              </p>
+            </div>
+            <div className="relative w-24 h-24">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="48" cy="48" r="40" stroke="#FFE4E4" strokeWidth="8" fill="none" />
+                <circle cx="48" cy="48" r="40" stroke="#FF7F7F" strokeWidth="8" fill="none" strokeDasharray={`${2 * Math.PI * 40}`} strokeDashoffset={`${2 * Math.PI * 40 * (1 - percentage / 100)}`} strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-lg font-bold text-coral-500">{Math.round(percentage)}%</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-coral-100">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">剩余热量</span>
+              <span className={`text-lg font-semibold ${remaining >= 0 ? 'text-green-500' : 'text-coral-500'}`}>{remaining >= 0 ? `${remaining} kcal` : `${Math.abs(remaining)} kcal 超标`}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FoodItem({ item, onDelete }) {
+      return (
+        <div className="flex items-center justify-between py-2 px-3 bg-coral-50 rounded-lg">
+          <div className="flex-1">
+            <p className="font-medium text-gray-700">{item.name}</p>
+            <p className="text-sm text-gray-500">{item.weight}g</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-coral-500 font-medium">{item.calories} kcal</span>
+            <button onClick={onDelete} className="w-8 h-8 rounded-full bg-coral-100 text-coral-500 hover:bg-coral-200 flex items-center justify-center transition-colors">×</button>
+          </div>
+        </div>
+      );
+    }
+
+    function MealInput() {
+      const { todayRecord, addFoods, removeFood, recipes, foodCaloriesDb } = useStore();
+      const [activeMeal, setActiveMeal] = useState('breakfast');
+      const [isAddingFood, setIsAddingFood] = useState(false);
+      const [showRecipeSelect, setShowRecipeSelect] = useState(false);
+      const [selectedRecipe, setSelectedRecipe] = useState(null);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [foodInput, setFoodInput] = useState('');
+      const [parsedFoods, setParsedFoods] = useState([]);
+      const [showParsed, setShowParsed] = useState(false);
+      const dropDownRef = useRef(null);
+
+      const mealLabels = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' };
+
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (dropDownRef.current && !dropDownRef.current.contains(event.target)) setShowRecipeSelect(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
+
+      const handleParseInput = () => {
+        if (!foodInput.trim()) return;
+        const foods = parseFoodInput(foodInput);
+        setParsedFoods(foods);
+        setShowParsed(true);
+      };
+
+      const handleConfirmFoods = () => {
+        addFoods(activeMeal, parsedFoods);
+        setFoodInput('');
+        setParsedFoods([]);
+        setShowParsed(false);
+        setIsAddingFood(false);
+      };
+
+      const handleSelectRecipe = (recipe) => {
+        setSelectedRecipe(recipe);
+        setShowRecipeSelect(false);
+        setSearchQuery(recipe.name);
+      };
+
+      const handleApplyRecipe = () => {
+        if (!selectedRecipe) return;
+        const totalWeight = selectedRecipe.ingredients.reduce((sum, ing) => sum + ing.weight, 0);
+        const avgCalories = selectedRecipe.totalCalories / (totalWeight / 100);
+        const food = { name: selectedRecipe.name, weight: totalWeight, caloriesPer100g: Math.round(avgCalories), calories: selectedRecipe.totalCalories };
+        addFoods(activeMeal, [food]);
+        setSelectedRecipe(null);
+        setSearchQuery('');
+        setIsAddingFood(false);
+      };
+
+      const filteredRecipes = recipes.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      const currentMealFoods = todayRecord.meals[activeMeal];
+
+      return (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
+          <div className="flex gap-2 mb-4">
+            {['breakfast', 'lunch', 'dinner'].map(meal => (
+              <button key={meal} onClick={() => setActiveMeal(meal)} className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${activeMeal === meal ? 'bg-coral-500 text-white shadow-md' : 'bg-coral-50 text-coral-600'}`}>{mealLabels[meal]}</button>
+            ))}
+          </div>
+          <div className="space-y-2 mb-4">
+            {currentMealFoods.length === 0 ? <p className="text-center text-gray-400 py-4 text-sm">还没有添加食物</p> : currentMealFoods.map(item => <FoodItem key={item.id} item={item} onDelete={() => removeFood(activeMeal, item.id)} />)}
+          </div>
+          {isAddingFood ? (
+            <div className="space-y-3 pt-4 border-t border-coral-100">
+              <div className="relative" ref={dropDownRef}>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input type="text" placeholder="搜索菜谱..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); if (!showRecipeSelect) setShowRecipeSelect(true); }} onFocus={() => setShowRecipeSelect(true)} className="w-full pl-10 pr-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+                    <Icon name="search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  </div>
+                  <button onClick={() => setShowRecipeSelect(!showRecipeSelect)} className="px-3 py-2 bg-coral-100 text-coral-600 rounded-lg hover:bg-coral-200"><Icon name="chevronDown" size={20} /></button>
+                </div>
+                {showRecipeSelect && (
+                  <div className="absolute z-10 w-full mt-2 bg-white rounded-lg shadow-lg border border-coral-100 max-h-60 overflow-y-auto">
+                    {filteredRecipes.length === 0 ? <p className="text-center text-gray-400 py-3 text-sm">未找到菜谱</p> : filteredRecipes.map(recipe => (
+                      <button key={recipe.id} onClick={() => handleSelectRecipe(recipe)} className="w-full px-4 py-2 text-left hover:bg-coral-50 transition-colors">
+                        <span className="font-medium text-gray-700">{recipe.name}</span>
+                        <span className="text-xs text-gray-400 ml-2">{categoryNames[recipe.category]}</span>
+                        <span className="text-sm text-coral-500 ml-2">{recipe.totalCalories} kcal</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedRecipe && (
+                <div className="p-3 bg-coral-50 rounded-lg">
+                  <p className="font-medium text-coral-600 mb-2">{selectedRecipe.name}</p>
+                  <p className="text-sm text-gray-600">食材: {selectedRecipe.ingredients.map(i => i.name).join(', ')}</p>
+                  <p className="text-sm text-gray-600">热量: {selectedRecipe.totalCalories} kcal</p>
+                  <button onClick={handleApplyRecipe} className="mt-2 w-full bg-coral-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-coral-600 transition-colors text-sm">应用此菜谱</button>
+                </div>
+              )}
+              <div className="relative">
+                <div className="absolute left-1/2 -translate-x-1/2 text-xs text-gray-400 -top-3 bg-white px-2">或输入食物</div>
+              </div>
+              <div className="relative">
+                <Icon name="brain" size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-coral-400" />
+                <textarea 
+                  value={foodInput} 
+                  onChange={e => setFoodInput(e.target.value)}
+                  placeholder="输入食物及数量，例如：两个鸡蛋 100克米饭 半根黄瓜 一颗苹果"
+                  className="w-full pl-10 pr-3 py-3 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400 resize-none h-24"
+                  rows={3}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={handleParseInput} disabled={!foodInput.trim()} className="flex-1 bg-coral-100 text-coral-600 px-4 py-2 rounded-lg font-medium hover:bg-coral-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  <Icon name="brain" size={18} /> AI解析
+                </button>
+                {showParsed && (
+                  <button onClick={handleConfirmFoods} className="flex-1 bg-coral-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-coral-600 transition-colors">确认添加</button>
+                )}
+                <button onClick={() => { setIsAddingFood(false); setFoodInput(''); setParsedFoods([]); setShowParsed(false); setSelectedRecipe(null); setSearchQuery(''); }} className="px-4 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors">取消</button>
+              </div>
+              {showParsed && parsedFoods.length > 0 && (
+                <div className="p-3 bg-coral-50 rounded-lg">
+                  <p className="text-sm font-medium text-coral-600 mb-2">解析结果：</p>
+                  <div className="space-y-1">
+                    {parsedFoods.map((food, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span className="text-gray-700">
+                          {food.quantity && food.quantityUnit 
+                            ? `${food.name}${food.quantity}${food.quantityUnit}≈${food.weight}g` 
+                            : `${food.name} ${food.weight}g`
+                          }
+                        </span>
+                        <span className={food.calories > 0 ? 'text-coral-500' : 'text-gray-400'}>{food.calories > 0 ? `${food.calories} kcal` : '未找到热量数据'}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-coral-500 mt-2">总计: {parsedFoods.reduce((sum, f) => sum + f.calories, 0)} kcal</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button onClick={() => setIsAddingFood(true)} className="w-full py-3 border-2 border-dashed border-coral-200 rounded-lg text-coral-500 hover:border-coral-400 hover:bg-coral-50 transition-colors flex items-center justify-center gap-2">
+              <Icon name="plus" size={20} /> 添加食物
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    function SuggestionCard() {
+      const { todayRecord, userProfile } = useStore();
+      const { totalCalories } = todayRecord;
+      const target = userProfile.dailyCalorieTarget;
+      const remaining = target - totalCalories;
+      const percentage = (totalCalories / target) * 100;
+
+      let suggestion;
+      if (percentage < 50) suggestion = { type: 'add', icon: 'sparkles', title: '可以加餐', desc: `距离目标还差 ${remaining} kcal，可以适当加餐补充能量`, color: 'bg-green-50 border-green-200', iconColor: 'text-green-500' };
+      else if (percentage >= 90 && percentage <= 110) suggestion = { type: 'maintain', icon: 'alert', title: '维持当前', desc: '摄入量接近目标，保持当前饮食习惯即可', color: 'bg-coral-50 border-coral-200', iconColor: 'text-coral-500' };
+      else if (percentage > 110) suggestion = { type: 'reduce', icon: 'trendingDown', title: '建议减少', desc: `已超出目标 ${Math.abs(remaining)} kcal，建议减少摄入或增加运动`, color: 'bg-orange-50 border-orange-200', iconColor: 'text-orange-500' };
+      else suggestion = { type: 'normal', icon: 'alert', title: '继续加油', desc: `还需 ${remaining} kcal，继续保持均衡饮食`, color: 'bg-coral-50 border-coral-200', iconColor: 'text-coral-500' };
+
+      return (
+        <div className={`bg-white rounded-xl p-4 border ${suggestion.color} mb-4`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${suggestion.color}`}><Icon name={suggestion.icon} size={20} className={suggestion.iconColor} /></div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-800">{suggestion.title}</h3>
+              <p className="text-sm text-gray-600 mt-1">{suggestion.desc}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function WeightTracker() {
+      const { todayRecord, updateWeight, historyRecords, updateHistoryWeight } = useStore();
+      const [currentWeight, setCurrentWeight] = useState(todayRecord.weight || 0);
+      const [isExpanded, setIsExpanded] = useState(false);
+      const [editingDate, setEditingDate] = useState(null);
+      const [editingWeight, setEditingWeight] = useState(0);
+
+      useEffect(() => { if (todayRecord.weight) setCurrentWeight(todayRecord.weight); }, [todayRecord.weight]);
+
+      const recentMondays = getRecentMondays(10);
+      
+      const getRecordForDate = (date) => {
+        if (date === getTodayDate()) {
+          return todayRecord;
+        }
+        return historyRecords.find(r => r.date === date);
+      };
+      
+      const getPreviousMondayWeight = (index) => {
+        if (index < recentMondays.length - 1) {
+          const prevDate = recentMondays[index + 1];
+          const prevRecord = getRecordForDate(prevDate);
+          return prevRecord?.weight;
+        }
+        return null;
+      };
+      
+      const handleUpdateWeight = () => { 
+        if (currentWeight > 0) {
+          updateWeight(currentWeight);
+          // 保存到历史记录
+          if (isMonday()) {
+            updateHistoryWeight(getTodayDate(), currentWeight);
+          }
+        }
+      };
+      
+      const handleEditHistoryWeight = (date, currentWeightVal) => {
+        setEditingDate(date);
+        setEditingWeight(currentWeightVal || 0);
+      };
+      
+      const handleSaveHistoryWeight = () => {
+        if (editingDate && editingWeight > 0) {
+          updateHistoryWeight(editingDate, editingWeight);
+          setEditingDate(null);
+        }
+      };
+
+      const weightChange = (() => {
+        if (recentMondays.length < 2) return null;
+        const thisWeekRecord = getRecordForDate(recentMondays[0]);
+        const lastWeekRecord = getRecordForDate(recentMondays[1]);
+        if (!thisWeekRecord?.weight || !lastWeekRecord?.weight) return null;
+        const change = thisWeekRecord.weight - lastWeekRecord.weight;
+        return { value: change };
+      })();
+
+      const showWeightTracker = isMonday() || todayRecord.weight || historyRecords.length > 0;
+      if (!showWeightTracker) return null;
+
+      return (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Icon name="calendar" size={18} className="text-coral-500" />
+              <h3 className="font-semibold text-gray-700">周一体重追踪</h3>
+              {isMonday() && <span className="px-2 py-0.5 bg-coral-100 text-coral-600 text-xs rounded-full">今天</span>}
+            </div>
+            <button onClick={() => setIsExpanded(!isExpanded)} className="text-coral-500 hover:text-coral-600">
+              <Icon name="chevronDown" size={20} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+          
+          {/* 当前周一体重 */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Icon name="scale" size={20} className="text-gray-400" />
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  value={currentWeight || ''} 
+                  onChange={e => setCurrentWeight(Number(e.target.value))} 
+                  placeholder="体重(kg)" 
+                  className="w-28 px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" 
+                />
+              </div>
+              <button onClick={handleUpdateWeight} className="bg-coral-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-coral-600 transition-colors text-sm">更新</button>
+            </div>
+            {weightChange && (
+              <div className={`p-3 rounded-lg flex items-center gap-3 ${weightChange.value > 0 ? 'bg-orange-50' : weightChange.value < 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
+                <Icon name={weightChange.value > 0 ? 'trendingUp' : weightChange.value < 0 ? 'trendingDown' : 'minus'} size={20} className={weightChange.value > 0 ? 'text-orange-500' : weightChange.value < 0 ? 'text-green-500' : 'text-gray-400'} />
+                <div>
+                  <p className="text-sm text-gray-600">相比上周一体重<span className={`font-semibold ml-1 ${weightChange.value > 0 ? 'text-orange-500' : weightChange.value < 0 ? 'text-green-500' : 'text-gray-500'}`}>{weightChange.value > 0 ? '+' : ''}{weightChange.value.toFixed(1)} kg</span></p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* 历史周一体重列表 */}
+          {isExpanded && (
+            <div className="mt-4 pt-4 border-t border-coral-100">
+              <h4 className="text-sm font-medium text-gray-600 mb-3">历史记录</h4>
+              <div className="space-y-2">
+                {recentMondays.map((date, index) => {
+                  const record = getRecordForDate(date);
+                  const prevWeight = getPreviousMondayWeight(index);
+                  const weightChangeThis = record?.weight && prevWeight ? record.weight - prevWeight : null;
+                  const isToday = date === getTodayDate();
+                  
+                  return (
+                    <div key={date} className="flex items-center justify-between p-3 bg-coral-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-700">{formatDate(date)}</span>
+                          <span className="text-xs text-gray-500">
+                            {isToday ? '今天' : index === 0 ? '本周' : `${index}周前`}
+                          </span>
+                        </div>
+                        {editingDate === date ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={editingWeight || ''}
+                              onChange={e => setEditingWeight(Number(e.target.value))}
+                              className="w-20 px-2 py-1 border border-coral-300 rounded-md text-sm"
+                              autoFocus
+                            />
+                            <button onClick={handleSaveHistoryWeight} className="text-coral-500 hover:text-coral-600">
+                              <span className="text-xs font-medium">保存</span>
+                            </button>
+                            <button onClick={() => setEditingDate(null)} className="text-gray-400 hover:text-gray-600">
+                              <span className="text-xs">取消</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-800">
+                              {record?.weight ? `${record.weight.toFixed(1)} kg` : '-'}
+                            </span>
+                            {weightChangeThis !== null && (
+                              <span className={`text-xs ${weightChangeThis > 0 ? 'text-orange-500' : weightChangeThis < 0 ? 'text-green-500' : 'text-gray-400'}`}>
+                                {weightChangeThis > 0 ? '+' : ''}{weightChangeThis.toFixed(1)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {editingDate !== date && record?.weight && (
+                        <button 
+                          onClick={() => handleEditHistoryWeight(date, record.weight)} 
+                          className="text-coral-400 hover:text-coral-600"
+                        >
+                          <Icon name="edit" size={16} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function CaloriesPage() {
+      return (<div className="space-y-4"><UserInfoCard /><CalorieSummary /><MealInput /><SuggestionCard /></div>);
+    }
+
+    // ========== Weight Tracking Page Components ==========
+    function WeightTrackingPage() {
+      const { initialWeight, updateInitialWeight, weightRecords, setWeightForDate } = useStore();
+      const [currentMonth, setCurrentMonth] = useState(new Date());
+      const [editingInitial, setEditingInitial] = useState(false);
+      const [editingInitialWeight, setEditingInitialWeight] = useState(initialWeight?.weight || 0);
+      const [editingDate, setEditingDate] = useState(null);
+      const [editingDateWeight, setEditingDateWeight] = useState(0);
+      
+      // 获取本周一的日期
+      const getThisMonday = () => {
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - diff);
+        return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+      };
+      
+      const thisMonday = getThisMonday();
+      const thisMondayWeight = weightRecords[thisMonday];
+      
+      // 计算总减重（斤）
+      const totalWeightLoss = initialWeight?.weight && thisMondayWeight 
+        ? (initialWeight.weight - thisMondayWeight) * 2 
+        : 0;
+      
+      // 获取月份的天数和第一天的星期
+      const getCalendarDays = () => {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const days = [];
+        
+        // 添加上个月的日期
+        for (let i = 0; i < firstDay; i++) {
+          const date = new Date(year, month, -firstDay + i + 1);
+          days.push({ 
+            date: date, 
+            dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+            isCurrentMonth: false
+          });
+        }
+        
+        // 添加当月的日期
+        for (let i = 1; i <= daysInMonth; i++) {
+          const date = new Date(year, month, i);
+          days.push({ 
+            date: date, 
+            dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`,
+            isCurrentMonth: true
+          });
+        }
+        
+        return days;
+      };
+      
+      const calendarDays = getCalendarDays();
+      
+      const handleSaveInitialWeight = () => {
+        if (editingInitialWeight > 0) {
+          updateInitialWeight({ weight: editingInitialWeight / 2, date: getTodayDate() });
+          setEditingInitial(false);
+        }
+      };
+      
+      const handleSaveDateWeight = () => {
+        if (editingDate && editingDateWeight > 0) {
+          setWeightForDate(editingDate, editingDateWeight / 2);
+          setEditingDate(null);
+        }
+      };
+      
+      const formatDateForDisplay = (dateStr) => {
+        const date = new Date(dateStr);
+        return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+      };
+      
+      const isMonday = (dateStr) => {
+        return new Date(dateStr).getDay() === 1;
+      };
+      
+      const goToPrevMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+      };
+      
+      const goToNextMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+      };
+      
+      const goToToday = () => {
+        setCurrentMonth(new Date());
+      };
+      
+      return (
+        <div className="space-y-4">
+          {/* 顶部体重信息 */}
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Icon name="scale" size={20} className="text-coral-500" />
+              体重记录
+            </h3>
+            
+            <div className="grid grid-cols-3 gap-4">
+              {/* 初始体重 */}
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">初始体重</p>
+                {editingInitial ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      value={editingInitialWeight || ''}
+                      onChange={(e) => setEditingInitialWeight(Number(e.target.value))}
+                      className="w-20 px-2 py-1 border border-coral-300 rounded text-sm"
+                      autoFocus
+                    />
+                    <span className="text-sm text-gray-500">斤</span>
+                    <button onClick={handleSaveInitialWeight} className="text-coral-500 hover:text-coral-600">
+                      <span className="text-xs font-medium">保存</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-gray-800">
+                      {initialWeight?.weight ? `${(initialWeight.weight * 2).toFixed(1)} 斤` : '-'}
+                    </span>
+                    <button onClick={() => {
+                      setEditingInitialWeight((initialWeight?.weight || 0) * 2);
+                      setEditingInitial(true);
+                    }} className="text-coral-400 hover:text-coral-600">
+                      <Icon name="edit" size={14} />
+                    </button>
+                  </div>
+                )}
+                {initialWeight?.date && (
+                  <p className="text-xs text-gray-400 mt-1">{formatDateForDisplay(initialWeight.date)}</p>
+                )}
+              </div>
+              
+              {/* 本周一体重 */}
+              <div className="p-3 bg-coral-50 rounded-lg">
+                <p className="text-xs text-coral-600 mb-1">本周一体重</p>
+                {editingDate === thisMonday ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      value={editingDateWeight || ''}
+                      onChange={(e) => setEditingDateWeight(Number(e.target.value))}
+                      className="w-20 px-2 py-1 border border-coral-300 rounded text-sm"
+                      autoFocus
+                    />
+                    <span className="text-sm text-gray-500">斤</span>
+                    <button onClick={handleSaveDateWeight} className="text-coral-500 hover:text-coral-600">
+                      <span className="text-xs font-medium">保存</span>
+                    </button>
+                    <button onClick={() => setEditingDate(null)} className="text-gray-400 hover:text-gray-600">
+                      <span className="text-xs">取消</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-coral-600">
+                      {thisMondayWeight ? `${(thisMondayWeight * 2).toFixed(1)} 斤` : '-'}
+                    </span>
+                    <button onClick={() => {
+                      setEditingDateWeight((thisMondayWeight || 0) * 2);
+                      setEditingDate(thisMonday);
+                    }} className="text-coral-400 hover:text-coral-600">
+                      <Icon name="edit" size={14} />
+                    </button>
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 mt-1">{formatDateForDisplay(thisMonday)}</p>
+              </div>
+              
+              {/* 总减重 */}
+              <div className="p-3 bg-green-50 rounded-lg">
+                <p className="text-xs text-green-600 mb-1">总减重</p>
+                <span className={`text-lg font-bold ${totalWeightLoss > 0 ? 'text-green-600' : totalWeightLoss < 0 ? 'text-red-500' : 'text-gray-600'}`}>
+                  {initialWeight?.weight && thisMondayWeight 
+                    ? `${totalWeightLoss > 0 ? '-' : ''}${Math.abs(totalWeightLoss).toFixed(1)} 斤`
+                    : '-'}
+                </span>
+                {totalWeightLoss > 0 && <p className="text-xs text-green-400 mt-1">继续加油！</p>}
+              </div>
+            </div>
+          </div>
+          
+          {/* 日历 */}
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={goToPrevMonth} className="p-2 hover:bg-gray-100 rounded-lg">
+                <Icon name="chevronLeft" size={20} className="text-gray-600" />
+              </button>
+              <h3 className="font-semibold text-gray-800">
+                {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
+              </h3>
+              <div className="flex gap-2">
+                <button onClick={goToToday} className="px-3 py-1 text-sm bg-coral-100 text-coral-600 rounded-lg hover:bg-coral-200">
+                  今天
+                </button>
+                <button onClick={goToNextMonth} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <Icon name="chevronRight" size={20} className="text-gray-600" />
+                </button>
+              </div>
+            </div>
+            
+            {/* 星期标题 */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {['日', '一', '二', '三', '四', '五', '六'].map((day, i) => (
+                <div key={i} className={`text-center py-2 text-sm font-medium ${i === 1 ? 'text-red-500' : 'text-gray-500'}`}>
+                  {day}
+                </div>
+              ))}
+            </div>
+            
+            {/* 日期网格 */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((day, i) => {
+                const weight = weightRecords[day.dateStr];
+                const isToday = day.dateStr === getTodayDate();
+                const isMon = isMonday(day.dateStr);
+                
+                if (editingDate === day.dateStr) {
+                  return (
+                    <div key={i} className="p-2 border border-coral-300 rounded-lg bg-coral-50">
+                      <div className="text-center mb-1">
+                        <span className={`text-sm font-medium ${isMon ? 'text-red-500' : 'text-gray-700'}`}>{day.date.getDate()}</span>
+                      </div>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={editingDateWeight || ''}
+                        onChange={(e) => setEditingDateWeight(Number(e.target.value))}
+                        className="w-full px-1 py-0.5 text-xs border border-coral-300 rounded text-center"
+                        autoFocus
+                        onBlur={handleSaveDateWeight}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveDateWeight();
+                          if (e.key === 'Escape') setEditingDate(null);
+                        }}
+                      />
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div 
+                    key={i} 
+                    onClick={() => {
+                      if (day.isCurrentMonth) {
+                        setEditingDateWeight(weight || 0);
+                        setEditingDate(day.dateStr);
+                      }
+                    }}
+                    className={`p-2 rounded-lg text-center cursor-pointer transition-all ${
+                      !day.isCurrentMonth ? 'text-gray-300 cursor-default' :
+                      isToday ? 'bg-coral-100 border-2 border-coral-400' :
+                      weight ? 'bg-green-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`text-sm font-medium ${isMon && day.isCurrentMonth ? 'text-red-500' : ''}`}>
+                      {day.date.getDate()}
+                    </span>
+                    {weight && (
+                      <div className={`text-xs mt-1 ${isMon && day.isCurrentMonth ? 'text-red-500 font-semibold' : 'text-green-600'}`}>
+                        {(weight * 2).toFixed(1)}斤
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
+                <span>周一</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-coral-100 border-2 border-coral-400 rounded"></div>
+                <span>今天</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-green-50 rounded"></div>
+                <span>已记录</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== Recipes Page Components ==========
+    function CategorySidebar({ activeCategory, onSelectCategory }) {
+      const categories = ['protein', 'fiber', 'carbs', 'fat'];
+      return (
+        <div className="w-full mb-4">
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {categories.map(category => (
+              <button key={category} onClick={() => onSelectCategory(category)} className={`px-4 py-2 rounded-full font-medium text-sm whitespace-nowrap transition-all ${activeCategory === category ? `${categoryColors[category]} shadow-sm` : 'bg-white text-gray-500 hover:bg-coral-50'}`}>{categoryNames[category]}</button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function RecipeList({ recipes, onSelectRecipe, onEditRecipe, onDeleteRecipe }) {
+      if (recipes.length === 0) return <div className="text-center py-8 text-gray-400"><p>该分类下暂无菜谱</p></div>;
+      return (
+        <div className="space-y-2">
+          {recipes.map(recipe => (
+            <div key={recipe.id} className="w-full p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-all">
+              <button onClick={() => onSelectRecipe(recipe)} className="w-full flex items-center justify-between">
+                <div className="text-left">
+                  <h4 className="font-medium text-gray-800">{recipe.name}</h4>
+                  <p className="text-sm text-gray-500 mt-1">{recipe.ingredients.map(i => i.name).join(' + ')}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-coral-500 font-medium">{recipe.totalCalories} kcal</span>
+                  <Icon name="chevronRight" size={20} className="text-gray-400" />
+                </div>
+              </button>
+              <div className="flex gap-2 mt-3 pt-3 border-t border-coral-100">
+                <button onClick={() => onEditRecipe(recipe)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-coral-500 hover:bg-coral-50 rounded-lg transition-colors">
+                  <Icon name="edit" size={16} /> 编辑
+                </button>
+                <button onClick={() => onDeleteRecipe(recipe.id)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                  <Icon name="trash" size={16} /> 删除
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function RecipeDetail({ recipe, onClose }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+          <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white px-4 py-3 border-b border-coral-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-lg text-gray-800">{recipe.name}</h3>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[recipe.category]}`}>{categoryNames[recipe.category]}</span>
+              </div>
+              <button onClick={onClose} className="w-8 h-8 rounded-full bg-coral-50 flex items-center justify-center"><Icon name="x" size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="p-4 space-y-6">
+              <div className="text-center p-4 bg-coral-50 rounded-xl">
+                <p className="text-sm text-gray-500">总热量</p>
+                <p className="text-3xl font-bold text-coral-500">{recipe.totalCalories}<span className="text-base font-normal"> kcal</span></p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-700 mb-3">食材</h4>
+                <div className="space-y-2">
+                  {recipe.ingredients.map((ing, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-700">{ing.name}</span>
+                      <div className="text-right">
+                        <span className="text-coral-500 font-medium">{ing.weight}g</span>
+                        <span className="text-gray-400 text-sm ml-2">{ing.caloriesPer100g > 0 ? `${Math.round((ing.caloriesPer100g * ing.weight) / 100)} kcal` : '无热量'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {recipe.seasonings.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-3">调料</h4>
+                  <div className="space-y-2">
+                    {recipe.seasonings.map((sea, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span className="text-gray-700">{sea.name}</span>
+                        <span className="text-coral-500 font-medium">{sea.weight}g</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2"><Icon name="oil" size={18} className="text-coral-400" />油类</h4>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700">{recipe.oilType}</span>
+                  <span className="text-coral-500 font-medium">{recipe.oilAmount > 0 ? `${recipe.oilAmount}g` : '无'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AddRecipeModal({ onClose, editingRecipe = null }) {
+      const { addRecipe, updateRecipe, foodCaloriesDb } = useStore();
+      const isEditing = !!editingRecipe;
+      const [name, setName] = useState(isEditing ? editingRecipe.name : '');
+      const [category, setCategory] = useState(isEditing ? editingRecipe.category : 'protein');
+      const [ingredients, setIngredients] = useState(isEditing ? [...editingRecipe.ingredients] : []);
+      const [seasonings, setSeasonings] = useState(isEditing ? [...editingRecipe.seasonings] : []);
+      const [oilType, setOilType] = useState(isEditing ? editingRecipe.oilType : '橄榄油');
+      const [oilAmount, setOilAmount] = useState(isEditing ? editingRecipe.oilAmount : 10);
+      const [newIngredient, setNewIngredient] = useState({ name: '', caloriesPer100g: 0, weight: 0 });
+      const [newSeasoning, setNewSeasoning] = useState({ name: '', caloriesPer100g: 0, weight: 0 });
+
+      const handleAddIngredient = () => {
+        if (!newIngredient.name) return;
+        const foodData = foodCaloriesDb[newIngredient.name];
+        const calories = foodData ? foodData.calories : (newIngredient.caloriesPer100g || 0);
+        const weight = newIngredient.weight || (foodData?.defaultWeight || 100);
+        setIngredients([...ingredients, { name: newIngredient.name, caloriesPer100g: calories, weight }]);
+        setNewIngredient({ name: '', caloriesPer100g: 0, weight: 0 });
+      };
+
+      const handleAddSeasoning = () => {
+        if (!newSeasoning.name) return;
+        const foodData = foodCaloriesDb[newSeasoning.name];
+        const calories = foodData ? foodData.calories : (newSeasoning.caloriesPer100g || 0);
+        const weight = newSeasoning.weight || 5;
+        setSeasonings([...seasonings, { name: newSeasoning.name, caloriesPer100g: calories, weight }]);
+        setNewSeasoning({ name: '', caloriesPer100g: 0, weight: 0 });
+      };
+
+      const handleRemoveIngredient = (idx) => setIngredients(ingredients.filter((_, i) => i !== idx));
+      const handleRemoveSeasoning = (idx) => setSeasonings(seasonings.filter((_, i) => i !== idx));
+
+      const calculateTotalCalories = () => {
+        const ingCals = ingredients.reduce((sum, ing) => sum + (ing.caloriesPer100g * ing.weight) / 100, 0);
+        const seaCals = seasonings.reduce((sum, sea) => sum + (sea.caloriesPer100g * sea.weight) / 100, 0);
+        const oilData = foodCaloriesDb[oilType];
+        const oilCalories = oilData ? oilData.calories : 900;
+        const oilCals = (oilAmount * oilCalories) / 100;
+        return Math.round(ingCals + seaCals + oilCals);
+      };
+
+      const handleSubmit = () => {
+        if (!name || ingredients.length === 0) return;
+        const recipeData = { name, category, ingredients, seasonings, oilType, oilAmount, totalCalories: calculateTotalCalories() };
+        if (isEditing) {
+          updateRecipe(editingRecipe.id, recipeData);
+        } else {
+          addRecipe(recipeData);
+        }
+        onClose();
+      };
+
+      const categories = ['protein', 'fiber', 'carbs', 'fat'];
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+          <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white px-4 py-3 border-b border-coral-100 flex items-center justify-between">
+              <h3 className="font-semibold text-lg text-gray-800">{isEditing ? '编辑菜谱' : '添加新菜谱'}</h3>
+              <button onClick={onClose} className="w-8 h-8 rounded-full bg-coral-50 flex items-center justify-center"><Icon name="x" size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">菜名</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="输入菜名" className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">分类</label><div className="flex gap-2">{categories.map(cat => (<button key={cat} onClick={() => setCategory(cat)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${category === cat ? 'bg-coral-500 text-white' : 'bg-coral-50 text-coral-600'}`}>{categoryNames[cat]}</button>))}</div></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">食材</label>
+                {ingredients.map((ing, idx) => (<div key={idx} className="flex items-center justify-between py-2 px-3 bg-coral-50 rounded-lg mb-2">
+                  <div className="text-left">
+                    <span className="text-gray-700 font-medium">{ing.name}</span>
+                    <span className="text-gray-500 text-sm ml-2">{ing.weight}g</span>
+                    <span className="text-coral-500 text-sm ml-2">({ing.caloriesPer100g} kcal/100g)</span>
+                  </div>
+                  <button onClick={() => handleRemoveIngredient(idx)} className="text-coral-500"><Icon name="x" size={16} /></button>
+                </div>))}
+                <div className="flex gap-2">
+                  <input type="text" placeholder="食材名" value={newIngredient.name} onChange={e => {
+                    setNewIngredient({...newIngredient, name: e.target.value});
+                    const data = foodCaloriesDb[e.target.value];
+                    if (data) {
+                      setNewIngredient(prev => ({...prev, caloriesPer100g: data.calories, weight: data.defaultWeight}));
+                    }
+                  }} className="flex-1 px-3 py-2 border border-coral-200 rounded-lg" />
+                  <input type="number" placeholder="克重" value={newIngredient.weight || ''} onChange={e => setNewIngredient({...newIngredient, weight: Number(e.target.value)})} className="w-20 px-3 py-2 border border-coral-200 rounded-lg" />
+                  <button onClick={handleAddIngredient} className="px-3 py-2 bg-coral-100 text-coral-600 rounded-lg"><Icon name="plus" size={20} /></button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">调料</label>
+                {seasonings.map((sea, idx) => (<div key={idx} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg mb-2">
+                  <div className="text-left">
+                    <span className="text-gray-700 font-medium">{sea.name}</span>
+                    <span className="text-gray-500 text-sm ml-2">{sea.weight}g</span>
+                    <span className="text-coral-500 text-sm ml-2">({sea.caloriesPer100g} kcal/100g)</span>
+                  </div>
+                  <button onClick={() => handleRemoveSeasoning(idx)} className="text-gray-400"><Icon name="x" size={16} /></button>
+                </div>))}
+                <div className="flex gap-2">
+                  <input type="text" placeholder="调料名" value={newSeasoning.name} onChange={e => {
+                    setNewSeasoning({...newSeasoning, name: e.target.value});
+                    const data = foodCaloriesDb[e.target.value];
+                    if (data) {
+                      setNewSeasoning(prev => ({...prev, caloriesPer100g: data.calories, weight: data.defaultWeight || 5}));
+                    }
+                  }} className="flex-1 px-3 py-2 border border-coral-200 rounded-lg" />
+                  <input type="number" placeholder="克重" value={newSeasoning.weight || ''} onChange={e => setNewSeasoning({...newSeasoning, weight: Number(e.target.value)})} className="w-20 px-3 py-2 border border-coral-200 rounded-lg" />
+                  <button onClick={handleAddSeasoning} className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg"><Icon name="plus" size={20} /></button>
+                </div>
+              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">油类</label><div className="flex gap-2"><select value={oilType} onChange={e => setOilType(e.target.value)} className="flex-1 px-3 py-2 border border-coral-200 rounded-lg"><option>橄榄油</option><option>花生油</option><option>菜籽油</option><option>猪油</option><option>芝麻油</option><option>无</option></select><input type="number" value={oilAmount} onChange={e => setOilAmount(Number(e.target.value))} className="w-24 px-3 py-2 border border-coral-200 rounded-lg" /></div></div>
+              <div className="p-4 bg-coral-50 rounded-xl text-center"><p className="text-sm text-gray-500">计算总热量</p><p className="text-2xl font-bold text-coral-500">{calculateTotalCalories()} kcal</p></div>
+              <button onClick={handleSubmit} disabled={!name || ingredients.length === 0} className="w-full bg-coral-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-coral-600 transition-colors disabled:opacity-50">{isEditing ? '保存修改' : '保存菜谱'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function RecipesPage() {
+      const { recipes, deleteRecipe } = useStore();
+      const [activeCategory, setActiveCategory] = useState('protein');
+      const [selectedRecipe, setSelectedRecipe] = useState(null);
+      const [showAddModal, setShowAddModal] = useState(false);
+      const [editingRecipe, setEditingRecipe] = useState(null);
+
+      const filteredRecipes = activeCategory ? recipes.filter(r => r.category === activeCategory) : recipes;
+
+      const handleEditRecipe = (recipe) => {
+        setEditingRecipe(recipe);
+        setShowAddModal(true);
+      };
+
+      const handleDeleteRecipe = (id) => {
+        if (confirm('确定删除这个菜谱吗？')) {
+          deleteRecipe(id);
+        }
+      };
+
+      const handleCloseModal = () => {
+        setShowAddModal(false);
+        setEditingRecipe(null);
+      };
+
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">菜谱库</h2>
+            <button onClick={() => setShowAddModal(true)} className="bg-coral-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-coral-600 transition-colors text-sm flex items-center gap-1"><Icon name="plus" size={18} />添加菜谱</button>
+          </div>
+          <CategorySidebar activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
+          <RecipeList recipes={filteredRecipes} onSelectRecipe={setSelectedRecipe} onEditRecipe={handleEditRecipe} onDeleteRecipe={handleDeleteRecipe} />
+          {selectedRecipe && <RecipeDetail recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />}
+          {showAddModal && <AddRecipeModal onClose={handleCloseModal} editingRecipe={editingRecipe} />}
+        </div>
+      );
+    }
+
+    // ========== App ==========
+    function App() {
+      const [activeTab, setActiveTab] = useState('calories');
+
+      return (
+        <StoreProvider>
+          <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+            {activeTab === 'calories' ? <CaloriesPage /> : 
+             activeTab === 'weight' ? <WeightTrackingPage /> : 
+             <RecipesPage />}
+          </Layout>
+        </StoreProvider>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
