@@ -36,9 +36,144 @@
   <script type="text/babel">
     const { useState, useEffect, createContext, useContext, useRef } = React;
 
+    // ========== Auth Context ==========
+    const AuthContext = createContext(null);
+
+    function AuthProvider({ children }) {
+      const [user, setUser] = useState(() => {
+        const saved = localStorage.getItem('auth_user');
+        return saved ? JSON.parse(saved) : null;
+      });
+      const [showAuthModal, setShowAuthModal] = useState(false);
+
+      const login = (email, password) => {
+        const userData = { email, name: email.split('@')[0] };
+        setUser(userData);
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+        setShowAuthModal(false);
+      };
+
+      const register = (email, password) => {
+        const userData = { email, name: email.split('@')[0] };
+        setUser(userData);
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+        setShowAuthModal(false);
+      };
+
+      const logout = () => {
+        setUser(null);
+        localStorage.removeItem('auth_user');
+      };
+
+      const requireLogin = (callback) => {
+        if (!user) {
+          setShowAuthModal(true);
+          return false;
+        }
+        if (callback) callback();
+        return true;
+      };
+
+      return (
+        <AuthContext.Provider value={{ user, login, register, logout, showAuthModal, setShowAuthModal, requireLogin }}>
+          {children}
+        </AuthContext.Provider>
+      );
+    }
+
+    function useAuth() {
+      const context = useContext(AuthContext);
+      if (!context) throw new Error('useAuth must be used within AuthProvider');
+      return context;
+    }
+
+    // ========== Auth Modal Component ==========
+    function AuthModal() {
+      const { showAuthModal, setShowAuthModal, login, register } = useAuth();
+      const [isSignUp, setIsSignUp] = useState(false);
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [confirmPassword, setConfirmPassword] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (!email || !password) {
+          setError('请填写完整信息');
+          return;
+        }
+        if (isSignUp && password !== confirmPassword) {
+          setError('两次输入的密码不一致');
+          return;
+        }
+        if (password.length < 6) {
+          setError('密码至少6位');
+          return;
+        }
+        setLoading(true);
+        try {
+          if (isSignUp) {
+            register(email, password);
+          } else {
+            login(email, password);
+          }
+          setEmail('');
+          setPassword('');
+          setConfirmPassword('');
+        } catch (err) {
+          setError(err.message || '操作失败');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      if (!showAuthModal) return null;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAuthModal(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl">
+            <div className="sticky top-0 bg-white px-6 py-4 border-b border-coral-100 flex items-center justify-between">
+              <h3 className="font-semibold text-xl text-gray-800">{isSignUp ? '注册账号' : '登录'}</h3>
+              <button onClick={() => setShowAuthModal(false)} className="w-8 h-8 rounded-full bg-coral-50 flex items-center justify-center hover:bg-coral-100">
+                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="请输入邮箱" className="w-full px-4 py-3 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码（至少6位）" className="w-full px-4 py-3 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+              </div>
+              {isSignUp && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">确认密码</label>
+                  <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="请再次输入密码" className="w-full px-4 py-3 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
+                </div>
+              )}
+              <button type="submit" disabled={loading} className="w-full bg-coral-500 text-white py-3 rounded-lg font-medium hover:bg-coral-600 transition-colors disabled:opacity-50">
+                {loading ? '处理中...' : (isSignUp ? '注册' : '登录')}
+              </button>
+              <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); }} className="w-full text-center text-coral-500 text-sm hover:text-coral-600">
+                {isSignUp ? '已有账号？去登录' : '没有账号？去注册'}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
     // ========== 食物热量数据库 ==========
     const foodCaloriesDb = {
-      // 主食类 - 单个/单位重量估算
       '米饭': { calories: 116, unit: '100g', defaultWeight: 100 },
       '大米': { calories: 345, unit: '100g', defaultWeight: 100 },
       '小米': { calories: 358, unit: '100g', defaultWeight: 100 },
@@ -55,7 +190,6 @@
       '饺子': { calories: 230, unit: '1个', defaultWeight: 20 },
       '馄饨': { calories: 110, unit: '1个', defaultWeight: 15 },
       
-      // 蛋白质类 - 单个/单位重量估算
       '鸡胸肉': { calories: 165, unit: '100g', defaultWeight: 100 },
       '鸡腿': { calories: 181, unit: '1个', defaultWeight: 120 },
       '鸡翅': { calories: 190, unit: '1个', defaultWeight: 45 },
@@ -79,7 +213,6 @@
       '酸奶': { calories: 91, unit: '1杯', defaultWeight: 150 },
       '奶酪': { calories: 385, unit: '1块', defaultWeight: 30 },
       
-      // 蔬菜类 - 单个/单位重量估算
       '西兰花': { calories: 34, unit: '1个', defaultWeight: 300 },
       '菠菜': { calories: 23, unit: '1捆', defaultWeight: 200 },
       '生菜': { calories: 14, unit: '1棵', defaultWeight: 300 },
@@ -110,9 +243,6 @@
       '莲藕': { calories: 70, unit: '1节', defaultWeight: 150 },
       '山药': { calories: 51, unit: '1段', defaultWeight: 150 },
       '芋头': { calories: 77, unit: '1个', defaultWeight: 100 },
-      '红薯': { calories: 86, unit: '1个', defaultWeight: 150 },
-      '紫薯': { calories: 77, unit: '1个', defaultWeight: 150 },
-      '玉米': { calories: 116, unit: '1根', defaultWeight: 150 },
       '豌豆': { calories: 105, unit: '100g', defaultWeight: 100 },
       '毛豆': { calories: 123, unit: '100g', defaultWeight: 100 },
       '扁豆': { calories: 25, unit: '100g', defaultWeight: 100 },
@@ -145,13 +275,10 @@
       '蟹味菇': { calories: 28, unit: '100g', defaultWeight: 100 },
       '白玉菇': { calories: 28, unit: '100g', defaultWeight: 100 },
       '紫菜': { calories: 260, unit: '100g', defaultWeight: 100 },
-      '豆腐': { calories: 70, unit: '100g', defaultWeight: 100 },
-      '豆浆': { calories: 30, unit: '1杯', defaultWeight: 250 },
       '腐竹': { calories: 450, unit: '100g', defaultWeight: 100 },
       '千张': { calories: 260, unit: '100g', defaultWeight: 100 },
       '豆干': { calories: 150, unit: '1块', defaultWeight: 50 },
       
-      // 水果类 - 单个/单位重量估算
       '苹果': { calories: 52, unit: '1个', defaultWeight: 150 },
       '香蕉': { calories: 91, unit: '1根', defaultWeight: 100 },
       '橙子': { calories: 47, unit: '1个', defaultWeight: 150 },
@@ -168,7 +295,6 @@
       '猕猴桃': { calories: 61, unit: '1个', defaultWeight: 80 },
       '柠檬': { calories: 35, unit: '1个', defaultWeight: 80 },
       
-      // 油类
       '橄榄油': { calories: 884, unit: '100g', defaultWeight: 100 },
       '花生油': { calories: 899, unit: '100g', defaultWeight: 100 },
       '菜籽油': { calories: 899, unit: '100g', defaultWeight: 100 },
@@ -176,7 +302,6 @@
       '芝麻油': { calories: 898, unit: '100g', defaultWeight: 100 },
       '黄油': { calories: 717, unit: '100g', defaultWeight: 100 },
       
-      // 调料类
       '盐': { calories: 0, unit: '1勺', defaultWeight: 5 },
       '糖': { calories: 400, unit: '1勺', defaultWeight: 10 },
       '白糖': { calories: 400, unit: '1勺', defaultWeight: 10 },
@@ -222,32 +347,9 @@
       '香叶': { calories: 300, unit: '1片', defaultWeight: 1 },
       '陈皮': { calories: 30, unit: '1片', defaultWeight: 1 },
       '干辣椒': { calories: 300, unit: '1个', defaultWeight: 5 },
-      '豆豉': { calories: 280, unit: '1勺', defaultWeight: 10 },
-      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
-      '花椒': { calories: 316, unit: '10粒', defaultWeight: 1 },
-      '八角': { calories: 195, unit: '1个', defaultWeight: 2 },
       '油': { calories: 900, unit: '1勺', defaultWeight: 10 },
       '食用油': { calories: 900, unit: '1勺', defaultWeight: 10 },
-      '淀粉': { calories: 345, unit: '1勺', defaultWeight: 10 },
-      '生粉': { calories: 345, unit: '1勺', defaultWeight: 10 },
-      '料酒': { calories: 115, unit: '1勺', defaultWeight: 10 },
-      '米酒': { calories: 115, unit: '1勺', defaultWeight: 10 },
-      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
-      '辣椒酱': { calories: 150, unit: '1勺', defaultWeight: 10 },
-      '芝麻酱': { calories: 600, unit: '1勺', defaultWeight: 15 },
-      '花生酱': { calories: 590, unit: '1勺', defaultWeight: 15 },
-      '沙拉酱': { calories: 490, unit: '1勺', defaultWeight: 15 },
-      '番茄酱': { calories: 85, unit: '1勺', defaultWeight: 10 },
-      '芥末酱': { calories: 60, unit: '1勺', defaultWeight: 10 },
-      '豆瓣酱': { calories: 180, unit: '1勺', defaultWeight: 10 },
-      '黄豆酱': { calories: 150, unit: '1勺', defaultWeight: 10 },
-      '甜面酱': { calories: 130, unit: '1勺', defaultWeight: 10 },
-      '腐乳': { calories: 150, unit: '1块', defaultWeight: 20 },
-      '豆豉': { calories: 280, unit: '1勺', defaultWeight: 10 },
-      '剁椒': { calories: 30, unit: '1勺', defaultWeight: 10 },
-      '泡椒': { calories: 25, unit: '1个', defaultWeight: 15 },
       
-      // 零食类
       '巧克力': { calories: 539, unit: '1块', defaultWeight: 20 },
       '薯片': { calories: 480, unit: '1袋', defaultWeight: 50 },
       '饼干': { calories: 430, unit: '1片', defaultWeight: 10 },
@@ -256,15 +358,23 @@
       '瓜子': { calories: 555, unit: '1把', defaultWeight: 30 },
       '花生': { calories: 567, unit: '10颗', defaultWeight: 10 },
       
-      // 饮料类
       '可乐': { calories: 42, unit: '1罐', defaultWeight: 330 },
       '果汁': { calories: 50, unit: '1杯', defaultWeight: 200 },
       '咖啡': { calories: 2, unit: '1杯', defaultWeight: 200 },
+      '黑咖啡': { calories: 2, unit: '1杯', defaultWeight: 200 },
+      '美式咖啡': { calories: 2, unit: '1杯', defaultWeight: 250 },
+      '拿铁': { calories: 120, unit: '1杯', defaultWeight: 300 },
+      '卡布奇诺': { calories: 150, unit: '1杯', defaultWeight: 250 },
+      '摩卡': { calories: 220, unit: '1杯', defaultWeight: 300 },
+      '奶茶': { calories: 250, unit: '1杯', defaultWeight: 500 },
       '茶': { calories: 1, unit: '1杯', defaultWeight: 250 },
+      '绿茶': { calories: 1, unit: '1杯', defaultWeight: 250 },
+      '红茶': { calories: 1, unit: '1杯', defaultWeight: 250 },
+      '乌龙茶': { calories: 2, unit: '1杯', defaultWeight: 250 },
       '啤酒': { calories: 32, unit: '1瓶', defaultWeight: 330 },
       '红酒': { calories: 75, unit: '1杯', defaultWeight: 100 },
+      '白酒': { calories: 230, unit: '100g', defaultWeight: 100 },
       
-      // 其他
       '水': { calories: 0, unit: '1杯', defaultWeight: 250 },
       '蜂蜜': { calories: 321, unit: '1勺', defaultWeight: 10 },
     };
@@ -280,14 +390,12 @@
         return chineseNumberMap[str];
       }
       
-      // 处理"十一"、"二十一"等
       if (str.startsWith('十')) {
         const afterTen = str.slice(1);
         if (afterTen === '') return 10;
         return 10 + (chineseNumberMap[afterTen] || 0);
       }
       
-      // 处理"二十一"、"三十二"等
       const tenMatch = str.match(/^(\w+)十(\w*)$/);
       if (tenMatch) {
         const tens = chineseNumberMap[tenMatch[1]] || 1;
@@ -295,7 +403,6 @@
         return tens * 10 + ones;
       }
       
-      // 尝试直接解析阿拉伯数字
       const num = parseFloat(str);
       if (!isNaN(num)) {
         return num;
@@ -311,7 +418,6 @@
                             '袋', '包', '勺', '匙', '双', '对'];
       const weightUnits = ['g', '克', 'kg', '千克', 'ml', '毫升'];
       
-      // 模式1: 数量+单位+食物，如"两个鸡蛋"、"100克米饭"
       for (const unit of quantityUnits) {
         const pattern = new RegExp(`^(.*?)${unit}(.+)$`);
         const match = text.match(pattern);
@@ -327,7 +433,6 @@
         }
       }
       
-      // 模式2: 食物+数量+单位，如"鸡蛋两个"、"米饭100克"
       for (const unit of quantityUnits) {
         const pattern = new RegExp(`^(.+?)([^\\d]+?)${unit}$`);
         const match = text.match(pattern);
@@ -343,7 +448,6 @@
         }
       }
       
-      // 模式3: 重量+食物，如"100g米饭"、"200毫升牛奶"
       for (const unit of weightUnits) {
         const pattern = new RegExp(`^(\\d+)${unit}(.+)$`);
         const match = text.match(pattern);
@@ -359,7 +463,6 @@
         }
       }
       
-      // 模式4: 食物+重量，如"米饭100克"
       for (const unit of weightUnits) {
         const pattern = new RegExp(`^(.+?)(\\d+)${unit}$`);
         const match = text.match(pattern);
@@ -375,14 +478,12 @@
         }
       }
       
-      // 模式5: 单独食物名称
       if (foodCaloriesDb[text]) {
         const foodData = foodCaloriesDb[text];
         const calories = Math.round((foodData.calories * foodData.defaultWeight) / 100);
         return { name: text, weight: foodData.defaultWeight, caloriesPer100g: foodData.calories, calories };
       }
       
-      // 兜底：未知食物
       return { name: text, weight: 100, caloriesPer100g: 0, calories: 0 };
     }
     
@@ -390,7 +491,6 @@
     function parseFoodInput(input) {
       const foods = [];
       
-      // 替换分隔符，然后按逗号/顿号分割成多个食物项
       const items = input
         .replace(/[，,。、]/g, '|')
         .split('|')
@@ -398,7 +498,6 @@
         .filter(item => item);
       
       for (let item of items) {
-        // 处理"X个半"特殊情况，如"一个半"、"两个半"、"三颗半"
         const halfMatch = item.match(/^(.+?)(个|颗|只|杯|碗|份|片|根|条|块|瓣|朵|粒|把|捆|棵)半(.+)?$/);
         if (halfMatch) {
           const numStr = halfMatch[1];
@@ -415,7 +514,6 @@
           }
         }
         
-        // 处理"半X"特殊情况
         if (item.startsWith('半')) {
           const rest = item.slice(1).trim();
           const quantityUnits = ['个', '颗', '只', '杯', '碗', '份', '片', '根', '条', '块', 
@@ -440,7 +538,6 @@
           continue;
         }
         
-        // 使用通用解析函数
         const result = parseFoodItem(item);
         foods.push(result);
       }
@@ -472,7 +569,6 @@
     };
     const isMonday = () => new Date().getDay() === 1;
     
-    // 获取最近N个周一的日期
     const getRecentMondays = (count = 10) => {
       const mondays = [];
       const now = new Date();
@@ -489,7 +585,6 @@
       return mondays;
     };
     
-    // 格式化日期显示
     const formatDate = (dateStr) => {
       const date = new Date(dateStr);
       const month = date.getMonth() + 1;
@@ -507,39 +602,54 @@
     }
 
     function StoreProvider({ children }) {
+      const { user } = useAuth();
+      
+      const getStorageKey = (key) => user ? `${user.email}_${key}` : key;
+
       const [userProfile, setUserProfile] = useState(() => {
-        const saved = localStorage.getItem('userProfile');
+        const saved = localStorage.getItem(getStorageKey('userProfile'));
         return saved ? JSON.parse(saved) : { height: 170, weight: 65, gender: 'male', dailyCalorieTarget: 2000 };
       });
       const [todayRecord, setTodayRecord] = useState(() => {
-        const saved = localStorage.getItem('todayRecord');
+        const saved = localStorage.getItem(getStorageKey('todayRecord'));
         const parsed = saved ? JSON.parse(saved) : null;
         if (parsed && parsed.date === getTodayDate()) return parsed;
         return { date: getTodayDate(), meals: { breakfast: [], lunch: [], dinner: [] }, totalCalories: 0 };
       });
       const [recipes, setRecipes] = useState(() => {
-        const saved = localStorage.getItem('recipes');
+        const saved = localStorage.getItem(getStorageKey('recipes'));
         return saved ? JSON.parse(saved) : defaultRecipes;
       });
       const [historyRecords, setHistoryRecords] = useState(() => {
-        const saved = localStorage.getItem('historyRecords');
+        const saved = localStorage.getItem(getStorageKey('historyRecords'));
         return saved ? JSON.parse(saved) : [];
       });
       const [weightRecords, setWeightRecords] = useState(() => {
-        const saved = localStorage.getItem('weightRecords');
+        const saved = localStorage.getItem(getStorageKey('weightRecords'));
         return saved ? JSON.parse(saved) : {};
       });
       const [initialWeight, setInitialWeight] = useState(() => {
-        const saved = localStorage.getItem('initialWeight');
+        const saved = localStorage.getItem(getStorageKey('initialWeight'));
         return saved ? JSON.parse(saved) : null;
       });
+      const [calorieRecords, setCalorieRecords] = useState(() => {
+        const saved = localStorage.getItem(getStorageKey('calorieRecords'));
+        return saved ? JSON.parse(saved) : {};
+      });
 
-      useEffect(() => { localStorage.setItem('userProfile', JSON.stringify(userProfile)); }, [userProfile]);
-      useEffect(() => { localStorage.setItem('todayRecord', JSON.stringify(todayRecord)); }, [todayRecord]);
-      useEffect(() => { localStorage.setItem('recipes', JSON.stringify(recipes)); }, [recipes]);
-      useEffect(() => { localStorage.setItem('historyRecords', JSON.stringify(historyRecords)); }, [historyRecords]);
-      useEffect(() => { localStorage.setItem('weightRecords', JSON.stringify(weightRecords)); }, [weightRecords]);
-      useEffect(() => { localStorage.setItem('initialWeight', JSON.stringify(initialWeight)); }, [initialWeight]);
+      useEffect(() => { localStorage.setItem(getStorageKey('userProfile'), JSON.stringify(userProfile)); }, [userProfile, user]);
+      useEffect(() => { localStorage.setItem(getStorageKey('todayRecord'), JSON.stringify(todayRecord)); }, [todayRecord, user]);
+      useEffect(() => { localStorage.setItem(getStorageKey('recipes'), JSON.stringify(recipes)); }, [recipes, user]);
+      useEffect(() => { localStorage.setItem(getStorageKey('historyRecords'), JSON.stringify(historyRecords)); }, [historyRecords, user]);
+      useEffect(() => { localStorage.setItem(getStorageKey('weightRecords'), JSON.stringify(weightRecords)); }, [weightRecords, user]);
+      useEffect(() => { localStorage.setItem(getStorageKey('initialWeight'), JSON.stringify(initialWeight)); }, [initialWeight, user]);
+      useEffect(() => { localStorage.setItem(getStorageKey('calorieRecords'), JSON.stringify(calorieRecords)); }, [calorieRecords, user]);
+
+      useEffect(() => {
+        if (todayRecord.date && todayRecord.totalCalories > 0) {
+          setCalorieRecords(prev => ({ ...prev, [todayRecord.date]: todayRecord.totalCalories }));
+        }
+      }, [todayRecord]);
 
       const updateUserProfile = (profile) => setUserProfile(prev => ({ ...prev, ...profile }));
 
@@ -600,6 +710,10 @@
         setWeightRecords(prev => ({ ...prev, [date]: weight }));
       };
       
+      const setCaloriesForDate = (date, calories) => {
+        setCalorieRecords(prev => ({ ...prev, [date]: calories }));
+      };
+      
       const updateInitialWeight = (weight) => {
         setInitialWeight(weight);
       };
@@ -608,7 +722,8 @@
         <StoreContext.Provider value={{ 
           userProfile, updateUserProfile, todayRecord, addFood, addFoods, removeFood, 
           updateWeight, recipes, addRecipe, updateRecipe, deleteRecipe, historyRecords, addToHistory,
-          updateHistoryWeight, weightRecords, setWeightForDate, initialWeight, updateInitialWeight, foodCaloriesDb 
+          updateHistoryWeight, weightRecords, setWeightForDate, initialWeight, updateInitialWeight, foodCaloriesDb,
+          calorieRecords, setCaloriesForDate
         }}>
           {children}
         </StoreContext.Provider>
@@ -638,8 +753,54 @@
         edit: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
         trash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
         brain: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 4.5a2.5 2.5 0 0 0-4.96-.46 2.5 2.5 0 0 0-1.98 3 2.5 2.5 0 0 0 1.3 4.24 2.5 2.5 0 0 1-.66 4.92 2.5 2.5 0 0 0 1.98 3 2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 1.98-3 2.5 2.5 0 0 0-1.3-4.24 2.5 2.5 0 0 1 .66-4.92 2.5 2.5 0 0 0-1.98-3z"/></svg>,
+        logout: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
       };
       return icons[name] || null;
+    }
+
+    // ========== User Menu Dropdown ==========
+    function UserMenu() {
+      const { user, logout, setShowAuthModal } = useAuth();
+      const [showMenu, setShowMenu] = useState(false);
+      const menuRef = useRef(null);
+
+      useEffect(() => {
+        const handleClickOutside = (event) => {
+          if (menuRef.current && !menuRef.current.contains(event.target)) {
+            setShowMenu(false);
+          }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
+
+      if (!user) {
+        return (
+          <button onClick={() => setShowAuthModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+            登录
+          </button>
+        );
+      }
+
+      return (
+        <div className="relative" ref={menuRef}>
+          <button onClick={() => setShowMenu(!showMenu)} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
+            <Icon name="user" size={20} className="text-white" />
+          </button>
+          {showMenu && (
+            <div className="absolute right-0 top-12 bg-white rounded-xl shadow-lg border border-coral-100 min-w-[180px] z-50">
+              <div className="px-4 py-3 border-b border-coral-100">
+                <p className="font-medium text-gray-800">{user.name}</p>
+                <p className="text-sm text-gray-500 truncate">{user.email}</p>
+              </div>
+              <button onClick={() => { logout(); setShowMenu(false); }} className="w-full px-4 py-3 flex items-center gap-2 text-gray-600 hover:bg-coral-50 transition-colors">
+                <Icon name="logout" size={18} />
+                退出登录
+              </button>
+            </div>
+          )}
+        </div>
+      );
     }
 
     // ========== Layout Components ==========
@@ -654,7 +815,7 @@
             ].map(item => (
               <button key={item.tab} onClick={() => onTabChange(item.tab)}
                 className={`flex flex-col items-center justify-center w-full h-full transition-colors ${activeTab === item.tab ? 'text-coral-500' : 'text-gray-400'}`}>
-                <Icon name={item.icon} size={24} className={activeTab === item.tab ? '' : ''} />
+                <Icon name={item.icon} size={24} />
                 <span className="text-xs mt-1 font-medium">{item.label}</span>
               </button>
             ))}
@@ -666,61 +827,17 @@
     function Layout({ children, activeTab, onTabChange }) {
       return (
         <div className="min-h-screen bg-coral-50 pb-16">
-          <header className="bg-gradient-to-r from-coral-400 to-coral-500 text-white px-4 py-6 shadow-md">
-            <h1 className="text-xl font-semibold">食谱热量记录</h1>
-            <p className="text-coral-100 text-sm mt-1">健康饮食，轻松管理</p>
+          <header className="bg-gradient-to-r from-coral-400 to-coral-500 text-white px-4 py-4 shadow-md">
+            <div className="max-w-lg mx-auto flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-semibold">食谱热量记录</h1>
+                <p className="text-coral-100 text-sm mt-0.5">健康饮食，轻松管理</p>
+              </div>
+              <UserMenu />
+            </div>
           </header>
           <main className="max-w-lg mx-auto px-4 py-4">{children}</main>
           <BottomNav activeTab={activeTab} onTabChange={onTabChange} />
-        </div>
-      );
-    }
-
-    // ========== Calories Page Components ==========
-    function UserInfoCard() {
-      const { userProfile, updateUserProfile } = useStore();
-      const [isExpanded, setIsExpanded] = useState(false);
-
-      return (
-        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
-          <button onClick={() => setIsExpanded(!isExpanded)} className="w-full flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-coral-100 flex items-center justify-center">
-                <Icon name="user" size={20} className="text-coral-500" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-700">个人信息</p>
-                <p className="text-sm text-gray-500">目标 {userProfile.dailyCalorieTarget} kcal/天</p>
-              </div>
-            </div>
-            <Icon name="chevronDown" size={20} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-          </button>
-          {isExpanded && (
-            <div className="mt-4 pt-4 border-t border-coral-100 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">身高 (cm)</label>
-                  <input type="number" value={userProfile.height} onChange={e => updateUserProfile({ height: Number(e.target.value) })} className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">体重 (kg)</label>
-                  <input type="number" value={userProfile.weight} onChange={e => updateUserProfile({ weight: Number(e.target.value) })} className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">性别</label>
-                <div className="flex gap-2">
-                  {['male', 'female'].map(g => (
-                    <button key={g} onClick={() => updateUserProfile({ gender: g })} className={`flex-1 py-2 rounded-lg font-medium transition-colors ${userProfile.gender === g ? 'bg-coral-500 text-white' : 'bg-coral-50 text-coral-600'}`}>{g === 'male' ? '男' : '女'}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">每日热量目标 (kcal)</label>
-                <input type="number" value={userProfile.dailyCalorieTarget} onChange={e => updateUserProfile({ dailyCalorieTarget: Number(e.target.value) })} className="w-full px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" />
-              </div>
-            </div>
-          )}
         </div>
       );
     }
@@ -882,7 +999,7 @@
                 <textarea 
                   value={foodInput} 
                   onChange={e => setFoodInput(e.target.value)}
-                  placeholder="输入食物及数量，例如：两个鸡蛋 100克米饭 半根黄瓜 一颗苹果"
+                  placeholder="输入食物及数量，例如：两个鸡蛋 100克米饭 半根黄瓜"
                   className="w-full pl-10 pr-3 py-3 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400 resize-none h-24"
                   rows={3}
                 />
@@ -951,167 +1068,246 @@
       );
     }
 
-    function WeightTracker() {
-      const { todayRecord, updateWeight, historyRecords, updateHistoryWeight } = useStore();
-      const [currentWeight, setCurrentWeight] = useState(todayRecord.weight || 0);
-      const [isExpanded, setIsExpanded] = useState(false);
+    function UserInfoCard() {
+      const { userProfile, updateUserProfile } = useStore();
+      const [isEditing, setIsEditing] = useState(false);
+      const [tempProfile, setTempProfile] = useState(userProfile);
+
+      const handleSave = () => {
+        updateUserProfile(tempProfile);
+        setIsEditing(false);
+      };
+
+      const calculateBMR = () => {
+        const { weight, height, gender } = userProfile;
+        if (gender === 'male') {
+          return Math.round(10 * weight + 6.25 * height - 5 * 30 + 5);
+        } else {
+          return Math.round(10 * weight + 6.25 * height - 5 * 30 - 161);
+        }
+      };
+
+      return (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-800">个人信息</h3>
+            <button onClick={() => { setTempProfile(userProfile); setIsEditing(true); }} className="text-coral-500 text-sm flex items-center gap-1">
+              <Icon name="edit" size={16} /> 编辑
+            </button>
+          </div>
+          
+          {isEditing ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">性别</label>
+                  <select value={tempProfile.gender} onChange={e => setTempProfile({...tempProfile, gender: e.target.value})} className="w-full px-3 py-2 border border-coral-200 rounded-lg">
+                    <option value="male">男</option>
+                    <option value="female">女</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">身高 (cm)</label>
+                  <input type="number" value={tempProfile.height} onChange={e => setTempProfile({...tempProfile, height: Number(e.target.value)})} className="w-full px-3 py-2 border border-coral-200 rounded-lg" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">体重 (kg)</label>
+                  <input type="number" value={tempProfile.weight} onChange={e => setTempProfile({...tempProfile, weight: Number(e.target.value)})} className="w-full px-3 py-2 border border-coral-200 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">每日目标 (kcal)</label>
+                  <input type="number" value={tempProfile.dailyCalorieTarget} onChange={e => setTempProfile({...tempProfile, dailyCalorieTarget: Number(e.target.value)})} className="w-full px-3 py-2 border border-coral-200 rounded-lg" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSave} className="flex-1 bg-coral-500 text-white py-2 rounded-lg font-medium">保存</button>
+                <button onClick={() => setIsEditing(false)} className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg font-medium">取消</button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-coral-50 rounded-lg">
+                <p className="text-xs text-coral-600 mb-1">基础代谢</p>
+                <p className="text-lg font-bold text-coral-500">{calculateBMR()} kcal</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-600 mb-1">每日目标</p>
+                <p className="text-lg font-bold text-gray-700">{userProfile.dailyCalorieTarget} kcal</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg">
+                <p className="text-xs text-green-600 mb-1">身高</p>
+                <p className="text-lg font-bold text-green-500">{userProfile.height} cm</p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-600 mb-1">体重</p>
+                <p className="text-lg font-bold text-blue-500">{userProfile.weight} kg</p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function CalorieCalendar() {
+      const { calorieRecords, userProfile, setCaloriesForDate } = useStore();
+      const [expanded, setExpanded] = useState(false);
+      const [currentMonth, setCurrentMonth] = useState(new Date());
       const [editingDate, setEditingDate] = useState(null);
-      const [editingWeight, setEditingWeight] = useState(0);
+      const [editingValue, setEditingValue] = useState(0);
 
-      useEffect(() => { if (todayRecord.weight) setCurrentWeight(todayRecord.weight); }, [todayRecord.weight]);
+      const getCalendarDays = () => {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const days = [];
 
-      const recentMondays = getRecentMondays(10);
-      
-      const getRecordForDate = (date) => {
-        if (date === getTodayDate()) {
-          return todayRecord;
+        for (let i = 0; i < firstDay; i++) {
+          const date = new Date(year, month, -firstDay + i + 1);
+          days.push({
+            date: date,
+            dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+            isCurrentMonth: false
+          });
         }
-        return historyRecords.find(r => r.date === date);
-      };
-      
-      const getPreviousMondayWeight = (index) => {
-        if (index < recentMondays.length - 1) {
-          const prevDate = recentMondays[index + 1];
-          const prevRecord = getRecordForDate(prevDate);
-          return prevRecord?.weight;
+
+        for (let i = 1; i <= daysInMonth; i++) {
+          const date = new Date(year, month, i);
+          days.push({
+            date: date,
+            dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`,
+            isCurrentMonth: true
+          });
         }
-        return null;
+
+        return days;
       };
-      
-      const handleUpdateWeight = () => { 
-        if (currentWeight > 0) {
-          updateWeight(currentWeight);
-          // 保存到历史记录
-          if (isMonday()) {
-            updateHistoryWeight(getTodayDate(), currentWeight);
+
+      const calendarDays = getCalendarDays();
+      const totalDays = calendarDays.length;
+      const target = userProfile.dailyCalorieTarget;
+
+      const goToPrevMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+      };
+
+      const goToNextMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+      };
+
+      const goToToday = () => {
+        setCurrentMonth(new Date());
+      };
+
+      const handleSaveCalories = () => {
+        if (editingDate && editingValue >= 0) {
+          if (editingValue === 0) {
+            setCaloriesForDate(editingDate, undefined);
+          } else {
+            setCaloriesForDate(editingDate, editingValue);
           }
-        }
-      };
-      
-      const handleEditHistoryWeight = (date, currentWeightVal) => {
-        setEditingDate(date);
-        setEditingWeight(currentWeightVal || 0);
-      };
-      
-      const handleSaveHistoryWeight = () => {
-        if (editingDate && editingWeight > 0) {
-          updateHistoryWeight(editingDate, editingWeight);
           setEditingDate(null);
         }
       };
 
-      const weightChange = (() => {
-        if (recentMondays.length < 2) return null;
-        const thisWeekRecord = getRecordForDate(recentMondays[0]);
-        const lastWeekRecord = getRecordForDate(recentMondays[1]);
-        if (!thisWeekRecord?.weight || !lastWeekRecord?.weight) return null;
-        const change = thisWeekRecord.weight - lastWeekRecord.weight;
-        return { value: change };
-      })();
-
-      const showWeightTracker = isMonday() || todayRecord.weight || historyRecords.length > 0;
-      if (!showWeightTracker) return null;
-
       return (
-        <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-2">
-              <Icon name="calendar" size={18} className="text-coral-500" />
-              <h3 className="font-semibold text-gray-700">周一体重追踪</h3>
-              {isMonday() && <span className="px-2 py-0.5 bg-coral-100 text-coral-600 text-xs rounded-full">今天</span>}
+              <span className="text-lg">🔥</span>
+              <span className="font-medium text-gray-800">热量日历</span>
             </div>
-            <button onClick={() => setIsExpanded(!isExpanded)} className="text-coral-500 hover:text-coral-600">
-              <Icon name="chevronDown" size={20} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-          
-          {/* 当前周一体重 */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Icon name="scale" size={20} className="text-gray-400" />
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  value={currentWeight || ''} 
-                  onChange={e => setCurrentWeight(Number(e.target.value))} 
-                  placeholder="体重(kg)" 
-                  className="w-28 px-3 py-2 border border-coral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-coral-400" 
-                />
-              </div>
-              <button onClick={handleUpdateWeight} className="bg-coral-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-coral-600 transition-colors text-sm">更新</button>
-            </div>
-            {weightChange && (
-              <div className={`p-3 rounded-lg flex items-center gap-3 ${weightChange.value > 0 ? 'bg-orange-50' : weightChange.value < 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
-                <Icon name={weightChange.value > 0 ? 'trendingUp' : weightChange.value < 0 ? 'trendingDown' : 'minus'} size={20} className={weightChange.value > 0 ? 'text-orange-500' : weightChange.value < 0 ? 'text-green-500' : 'text-gray-400'} />
-                <div>
-                  <p className="text-sm text-gray-600">相比上周一体重<span className={`font-semibold ml-1 ${weightChange.value > 0 ? 'text-orange-500' : weightChange.value < 0 ? 'text-green-500' : 'text-gray-500'}`}>{weightChange.value > 0 ? '+' : ''}{weightChange.value.toFixed(1)} kg</span></p>
+            <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={18} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+
+          {expanded && (
+            <div className="px-4 pb-4 border-t border-coral-50">
+              <div className="flex items-center justify-between mt-3 mb-3">
+                <button onClick={goToPrevMonth} className="p-1 hover:bg-gray-100 rounded-lg">
+                  <Icon name="chevronLeft" size={18} className="text-gray-600" />
+                </button>
+                <h3 className="font-semibold text-gray-800 text-sm">
+                  {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
+                </h3>
+                <div className="flex gap-1">
+                  <button onClick={goToToday} className="px-2 py-1 text-xs bg-coral-100 text-coral-600 rounded-lg hover:bg-coral-200">今天</button>
+                  <button onClick={goToNextMonth} className="p-1 hover:bg-gray-100 rounded-lg">
+                    <Icon name="chevronRight" size={18} className="text-gray-600" />
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
-          
-          {/* 历史周一体重列表 */}
-          {isExpanded && (
-            <div className="mt-4 pt-4 border-t border-coral-100">
-              <h4 className="text-sm font-medium text-gray-600 mb-3">历史记录</h4>
-              <div className="space-y-2">
-                {recentMondays.map((date, index) => {
-                  const record = getRecordForDate(date);
-                  const prevWeight = getPreviousMondayWeight(index);
-                  const weightChangeThis = record?.weight && prevWeight ? record.weight - prevWeight : null;
-                  const isToday = date === getTodayDate();
-                  
-                  return (
-                    <div key={date} className="flex items-center justify-between p-3 bg-coral-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-700">{formatDate(date)}</span>
-                          <span className="text-xs text-gray-500">
-                            {isToday ? '今天' : index === 0 ? '本周' : `${index}周前`}
-                          </span>
+
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
+                  <div key={i} className="text-center py-1 text-xs font-medium text-gray-400">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((day, idx) => {
+                  const calories = calorieRecords[day.dateStr];
+                  const isToday = day.dateStr === getTodayDate();
+                  const isEditing = editingDate === day.dateStr;
+
+                  let bgClass = !day.isCurrentMonth ? 'bg-transparent' :
+                    isToday ? 'bg-coral-100' :
+                    calories ? 'bg-green-50' : 'bg-white';
+
+                  if (isEditing) {
+                    return (
+                      <div key={idx} className="p-1 border border-coral-300 rounded-lg bg-coral-50">
+                        <div className="text-center mb-0.5">
+                          <span className="text-xs font-medium">{day.date.getDate()}</span>
                         </div>
-                        {editingDate === date ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={editingWeight || ''}
-                              onChange={e => setEditingWeight(Number(e.target.value))}
-                              className="w-20 px-2 py-1 border border-coral-300 rounded-md text-sm"
-                              autoFocus
-                            />
-                            <button onClick={handleSaveHistoryWeight} className="text-coral-500 hover:text-coral-600">
-                              <span className="text-xs font-medium">保存</span>
-                            </button>
-                            <button onClick={() => setEditingDate(null)} className="text-gray-400 hover:text-gray-600">
-                              <span className="text-xs">取消</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-800">
-                              {record?.weight ? `${record.weight.toFixed(1)} kg` : '-'}
-                            </span>
-                            {weightChangeThis !== null && (
-                              <span className={`text-xs ${weightChangeThis > 0 ? 'text-orange-500' : weightChangeThis < 0 ? 'text-green-500' : 'text-gray-400'}`}>
-                                {weightChangeThis > 0 ? '+' : ''}{weightChangeThis.toFixed(1)}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={editingValue || ''}
+                          onChange={(e) => setEditingValue(Number(e.target.value))}
+                          className="w-full px-1 py-0.5 text-xs border border-coral-300 rounded text-center"
+                          autoFocus
+                          onBlur={handleSaveCalories}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveCalories();
+                            if (e.key === 'Escape') setEditingDate(null);
+                          }}
+                        />
                       </div>
-                      {editingDate !== date && record?.weight && (
-                        <button 
-                          onClick={() => handleEditHistoryWeight(date, record.weight)} 
-                          className="text-coral-400 hover:text-coral-600"
-                        >
-                          <Icon name="edit" size={16} />
-                        </button>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (day.isCurrentMonth) {
+                          setEditingValue(calories || 0);
+                          setEditingDate(day.dateStr);
+                        }
+                      }}
+                      className={`p-1 rounded-lg text-center cursor-pointer transition-all ${bgClass} ${isToday ? 'border-2 border-coral-400' : ''} ${!day.isCurrentMonth ? 'text-gray-300 cursor-default' : 'hover:bg-coral-50'}`}
+                    >
+                      <span className="text-xs font-medium">{day.date.getDate()}</span>
+                      {calories && day.isCurrentMonth && (
+                        <div className="text-xs mt-0.5 text-coral-500 font-medium">
+                          {calories}
+                        </div>
                       )}
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                <span>目标：{target} kcal/天</span>
+                <span>已记录：{Object.keys(calorieRecords).filter(k => calorieRecords[k] > 0).length} 天</span>
               </div>
             </div>
           )}
@@ -1120,7 +1316,7 @@
     }
 
     function CaloriesPage() {
-      return (<div className="space-y-4"><UserInfoCard /><CalorieSummary /><MealInput /><SuggestionCard /></div>);
+      return (<div className="space-y-4"><UserInfoCard /><CalorieCalendar /><CalorieSummary /><MealInput /><SuggestionCard /></div>);
     }
 
     // ========== Weight Tracking Page Components ==========
@@ -1129,10 +1325,10 @@
       const [currentMonth, setCurrentMonth] = useState(new Date());
       const [editingInitial, setEditingInitial] = useState(false);
       const [editingInitialWeight, setEditingInitialWeight] = useState(initialWeight?.weight || 0);
+      const [editingInitialDate, setEditingInitialDate] = useState(initialWeight?.date || getTodayDate());
       const [editingDate, setEditingDate] = useState(null);
       const [editingDateWeight, setEditingDateWeight] = useState(0);
       
-      // 获取本周一的日期
       const getThisMonday = () => {
         const now = new Date();
         const dayOfWeek = now.getDay();
@@ -1145,12 +1341,10 @@
       const thisMonday = getThisMonday();
       const thisMondayWeight = weightRecords[thisMonday];
       
-      // 计算总减重（斤）
       const totalWeightLoss = initialWeight?.weight && thisMondayWeight 
-        ? (initialWeight.weight - thisMondayWeight) * 2 
+        ? initialWeight.weight - thisMondayWeight
         : 0;
       
-      // 获取月份的天数和第一天的星期
       const getCalendarDays = () => {
         const year = currentMonth.getFullYear();
         const month = currentMonth.getMonth();
@@ -1158,7 +1352,6 @@
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const days = [];
         
-        // 添加上个月的日期
         for (let i = 0; i < firstDay; i++) {
           const date = new Date(year, month, -firstDay + i + 1);
           days.push({ 
@@ -1168,7 +1361,6 @@
           });
         }
         
-        // 添加当月的日期
         for (let i = 1; i <= daysInMonth; i++) {
           const date = new Date(year, month, i);
           days.push({ 
@@ -1185,14 +1377,14 @@
       
       const handleSaveInitialWeight = () => {
         if (editingInitialWeight > 0) {
-          updateInitialWeight({ weight: editingInitialWeight / 2, date: getTodayDate() });
+          updateInitialWeight({ weight: editingInitialWeight, date: editingInitialDate || getTodayDate() });
           setEditingInitial(false);
         }
       };
       
       const handleSaveDateWeight = () => {
         if (editingDate && editingDateWeight > 0) {
-          setWeightForDate(editingDate, editingDateWeight / 2);
+          setWeightForDate(editingDate, editingDateWeight);
           setEditingDate(null);
         }
       };
@@ -1220,7 +1412,6 @@
       
       return (
         <div className="space-y-4">
-          {/* 顶部体重信息 */}
           <div className="bg-white rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <Icon name="scale" size={20} className="text-coral-500" />
@@ -1228,43 +1419,53 @@
             </h3>
             
             <div className="grid grid-cols-3 gap-4">
-              {/* 初始体重 */}
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">初始体重</p>
                 {editingInitial ? (
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      step="0.1"
-                      value={editingInitialWeight || ''}
-                      onChange={(e) => setEditingInitialWeight(Number(e.target.value))}
-                      className="w-20 px-2 py-1 border border-coral-300 rounded text-sm"
-                      autoFocus
-                    />
-                    <span className="text-sm text-gray-500">斤</span>
-                    <button onClick={handleSaveInitialWeight} className="text-coral-500 hover:text-coral-600">
-                      <span className="text-xs font-medium">保存</span>
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={editingInitialWeight || ''}
+                        onChange={(e) => setEditingInitialWeight(Number(e.target.value))}
+                        className="w-20 px-2 py-1 border border-coral-300 rounded text-sm"
+                        autoFocus
+                      />
+                      <span className="text-sm text-gray-500">斤</span>
+                      <button onClick={handleSaveInitialWeight} className="text-coral-500 hover:text-coral-600">
+                        <span className="text-xs font-medium">保存</span>
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">日期</span>
+                      <input 
+                        type="date" 
+                        value={editingInitialDate || ''}
+                        onChange={(e) => setEditingInitialDate(e.target.value)}
+                        className="px-2 py-1 border border-coral-300 rounded text-xs"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-bold text-gray-800">
-                      {initialWeight?.weight ? `${(initialWeight.weight * 2).toFixed(1)} 斤` : '-'}
+                      {initialWeight?.weight ? `${initialWeight.weight.toFixed(1)} 斤` : '-'}
                     </span>
                     <button onClick={() => {
-                      setEditingInitialWeight((initialWeight?.weight || 0) * 2);
+                      setEditingInitialWeight(initialWeight?.weight || 0);
+                      setEditingInitialDate(initialWeight?.date || getTodayDate());
                       setEditingInitial(true);
                     }} className="text-coral-400 hover:text-coral-600">
                       <Icon name="edit" size={14} />
                     </button>
                   </div>
                 )}
-                {initialWeight?.date && (
+                {!editingInitial && initialWeight?.date && (
                   <p className="text-xs text-gray-400 mt-1">{formatDateForDisplay(initialWeight.date)}</p>
                 )}
               </div>
               
-              {/* 本周一体重 */}
               <div className="p-3 bg-coral-50 rounded-lg">
                 <p className="text-xs text-coral-600 mb-1">本周一体重</p>
                 {editingDate === thisMonday ? (
@@ -1288,10 +1489,10 @@
                 ) : (
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-bold text-coral-600">
-                      {thisMondayWeight ? `${(thisMondayWeight * 2).toFixed(1)} 斤` : '-'}
+                      {thisMondayWeight ? `${thisMondayWeight.toFixed(1)} 斤` : '-'}
                     </span>
                     <button onClick={() => {
-                      setEditingDateWeight((thisMondayWeight || 0) * 2);
+                      setEditingDateWeight(thisMondayWeight || 0);
                       setEditingDate(thisMonday);
                     }} className="text-coral-400 hover:text-coral-600">
                       <Icon name="edit" size={14} />
@@ -1301,7 +1502,6 @@
                 <p className="text-xs text-gray-400 mt-1">{formatDateForDisplay(thisMonday)}</p>
               </div>
               
-              {/* 总减重 */}
               <div className="p-3 bg-green-50 rounded-lg">
                 <p className="text-xs text-green-600 mb-1">总减重</p>
                 <span className={`text-lg font-bold ${totalWeightLoss > 0 ? 'text-green-600' : totalWeightLoss < 0 ? 'text-red-500' : 'text-gray-600'}`}>
@@ -1314,7 +1514,6 @@
             </div>
           </div>
           
-          {/* 日历 */}
           <div className="bg-white rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <button onClick={goToPrevMonth} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -1333,7 +1532,6 @@
               </div>
             </div>
             
-            {/* 星期标题 */}
             <div className="grid grid-cols-7 gap-1 mb-2">
               {['日', '一', '二', '三', '四', '五', '六'].map((day, i) => (
                 <div key={i} className={`text-center py-2 text-sm font-medium ${i === 1 ? 'text-red-500' : 'text-gray-500'}`}>
@@ -1342,7 +1540,6 @@
               ))}
             </div>
             
-            {/* 日期网格 */}
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, i) => {
                 const weight = weightRecords[day.dateStr];
@@ -1392,7 +1589,7 @@
                     </span>
                     {weight && (
                       <div className={`text-xs mt-1 ${isMon && day.isCurrentMonth ? 'text-red-500 font-semibold' : 'text-green-600'}`}>
-                        {(weight * 2).toFixed(1)}斤
+                        {weight.toFixed(1)}斤
                       </div>
                     )}
                   </div>
@@ -1683,17 +1880,17 @@
       const [activeTab, setActiveTab] = useState('calories');
 
       return (
-        <StoreProvider>
-          <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-            {activeTab === 'calories' ? <CaloriesPage /> : 
-             activeTab === 'weight' ? <WeightTrackingPage /> : 
-             <RecipesPage />}
-          </Layout>
-        </StoreProvider>
+        <AuthProvider>
+          <StoreProvider>
+            <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+              {activeTab === 'calories' ? <CaloriesPage /> : 
+               activeTab === 'weight' ? <WeightTrackingPage /> : 
+               <RecipesPage />}
+            </Layout>
+            <AuthModal />
+          </StoreProvider>
+        </AuthProvider>
       );
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
-</body>
-</html>
